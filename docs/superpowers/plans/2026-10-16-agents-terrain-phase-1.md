@@ -39,7 +39,7 @@
 agents-terrain/
 ├── package.json, tsconfig.json, next.config.ts, postcss.config.mjs, eslint.config.mjs
 ├── vitest.config.ts, prisma.config.ts, .env.example, .gitignore
-├── Dockerfile, docker-compose.yml, docs/runbook.md                 (chunk 19)
+├── Dockerfile, docker-compose.yml, docs/runbook.md                 (chunk 22)
 ├── prisma/schema.prisma, prisma/migrations/
 ├── proxy.ts                                                        garde d'accès /admin, /agent, /api/agent
 ├── types/next-auth.d.ts
@@ -9804,7 +9804,7 @@ export default function LoginPage() {
 Run: `npm run dev`, puis ouvrir `http://localhost:3000/login` en vue mobile (390 px).
 Expected :
 - un numéro invalide (« 123 ») affiche « Enter a valid US mobile number » sous le champ ;
-- le numéro d'un agent créé par `scripts/seed-dev.ts` (chunks du back-office) passe à l'écran « Check your texts » ;
+- le numéro d'un agent créé par `scripts/seed-dev.ts` (chunk 20) passe à l'écran « Check your texts » ;
 - le code s'affiche dans la console du serveur (`[sms:console]`) ;
 - saisir ce code mène vers `/agent`, puis vers l'écran qui correspond au statut de l'agent ;
 - un faux code affiche « That code is not valid… ».
@@ -10817,7 +10817,7 @@ export default async function MissionsPage() {
 
 - [ ] **Step 4: Vérifier dans le navigateur**
 
-Avec `scripts/seed-dev.ts` (chunks du back-office : agent ACTIVE, missions ouvertes près de lui), se connecter puis ouvrir `/agent/missions` à 390 px.
+Avec `scripts/seed-dev.ts` (chunk 20 : agent ACTIVE, missions ouvertes près de lui), se connecter puis ouvrir `/agent/missions` à 390 px.
 Expected :
 - la liste montre les cartes de mission (métier, ville, distance, créneau, décomposition « $40 visit + $25 live + $50 if customer », « up to $115 »), sans nom ni adresse de pro ;
 - « Map » affiche le motif de quartier, l'agent au centre et un pin par mission, avec le badge « Bonus » s'il y a un bonus ;
@@ -12274,11 +12274,2953 @@ git commit -m "test(e2e): agent happy path from SMS login to validated earning"
 ```
 
 
-## Chunk 19: Déploiement et runbook
+## Chunk 19: Back-office — accès, pros, missions
+
+Ce chunk pose le back-office : fonctions pures, connexion, gabarit, tableau de bord, et les server actions des pros et des missions. Les écrans des pros et des missions suivent au chunk 16 (avec les données de démo et les SMS reçus), la validation, les agents et les réglages au chunk 17.
+
+Le back-office vit sous `app/admin/`. Les pages protégées sont dans le groupe de routes `app/admin/(app)/` (absent de l'URL) : son `layout.tsx` (barre latérale) ne s'applique pas à `app/admin/login/`, qui reste publique. Les dossiers `_lib/` (fonctions pures, testées) et `_components/` (briques d'interface) sont privés : le routeur les ignore.
+
+Règles communes aux chunks 15 à 17 :
+
+- Chaque page appelle `requireAdmin()` elle-même : Next rend le layout et la page en parallèle, le layout ne protège pas la page.
+- Chaque section a son `actions.ts` (`'use server'`, n'exporte que des fonctions async). Chaque action commence par `requireAdmin()` (ou `requireAdmin(['ADMIN'])` pour les réglages), appelle le service avec `admin.email` comme acteur, puis fait `revalidatePath('/admin', 'layout')` et/ou `redirect`. `redirect` reste toujours **hors** d'un `try` : il fonctionne en levant une exception.
+- Les erreurs reviennent au formulaire par `useActionState` (`ActionForm` ou un formulaire client dédié) ou par un paramètre de recherche. `actionError` ne laisse passer que les messages courts des services ; le reste est journalisé côté serveur.
+- Textes en français avec l'apostrophe typographique `’` dans le JSX (la règle ESLint `react/no-unescaped-entities` refuse `'`).
+- Les chemins contenant `(app)` se mettent entre guillemets dans le terminal.
+
+Vérifications manuelles : Postgres local démarré, `npm run dev`, connexion par Google avec un compte ajouté par `npm run admin:add -- prenom@allo-chantiers.fr ADMIN` (client OAuth du Task 24). À partir du Task 68, `npm run seed:dev` charge un jeu de démo et affiche une ligne « Session admin » à coller dans la console du navigateur (sur `http://localhost:3000`) pour se connecter sans Google.
+
+### Task 65: Fonctions pures du back-office (formats, formulaires, libellés)
+
+**Files:**
+- Create: `app/admin/_lib/format.ts`, `app/admin/_lib/forms.ts`, `app/admin/_lib/labels.ts`
+- Test: `app/admin/_lib/format.test.ts`, `app/admin/_lib/forms.test.ts`
+
+- [ ] **Step 1: Écrire les tests qui échouent**
+
+`app/admin/_lib/format.test.ts` :
+
+```ts
+import { describe, expect, it } from 'vitest'
+import { centsToDollarsInput, dollarsToCents, formatParis, formatStamp, formatUsd, mapsUrl, missionHref } from './format'
+
+describe('dollarsToCents', () => {
+  it.each([
+    ['40', 4000],
+    ['40.5', 4050],
+    ['40,50', 4050],
+    [' $15 ', 1500],
+    ['0.07', 7],
+  ])('« %s » → %i cents', (input, cents) => {
+    expect(dollarsToCents(input)).toBe(cents)
+  })
+  it.each(['', 'abc', '-5', '1.234', '1e3', '1234567'])('refuse « %s »', (input) => {
+    expect(dollarsToCents(input)).toBeNull()
+  })
+})
+
+describe('montants', () => {
+  it('affiche en dollars à la française, et en valeur de champ de saisie', () => {
+    expect(formatUsd(13650)).toBe('136,50 $')
+    expect(formatUsd(7)).toBe('0,07 $')
+    expect(centsToDollarsInput(4050)).toBe('40.50')
+    expect(centsToDollarsInput(7)).toBe('0.07')
+  })
+})
+
+describe('dates', () => {
+  it('horodatage interne à l’heure de Paris (été puis hiver)', () => {
+    expect(formatParis(new Date('2026-10-16T12:05:00Z'))).toBe('16/10/2026 14:05')
+    expect(formatParis(new Date('2026-12-01T08:00:00Z'))).toBe('01/12/2026 09:00')
+  })
+  it('horodatage d’étape à la seconde, à l’heure du pro', () => {
+    expect(formatStamp('2026-10-16T14:00:05.000Z', 'America/New_York')).toBe('16/10 10:00:05')
+    expect(formatStamp(new Date('2026-10-16T14:00:05Z'), 'America/Los_Angeles')).toBe('16/10 07:00:05')
+  })
+})
+
+describe('liens', () => {
+  it('Google Maps vers des coordonnées', () => {
+    expect(mapsUrl(42.3567, -71.0624)).toBe('https://www.google.com/maps/search/?api=1&query=42.3567,-71.0624')
+  })
+  it('une visite soumise ou décidée s’ouvre dans la validation, sinon sur la fiche du pro', () => {
+    expect(missionHref({ id: 'm1', proId: 'p1', status: 'SUBMITTED' })).toBe('/admin/review/m1')
+    expect(missionHref({ id: 'm1', proId: 'p1', status: 'VALIDATED' })).toBe('/admin/review/m1')
+    expect(missionHref({ id: 'm1', proId: 'p1', status: 'OPEN' })).toBe('/admin/pros/p1#mission-m1')
+  })
+})
+```
+
+`app/admin/_lib/forms.test.ts` :
+
+```ts
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { actionError, formText, formValues, loginErrorMessage, pickEnum } from './forms'
+
+afterEach(() => vi.restoreAllMocks())
+
+describe('lecture des formulaires', () => {
+  it('garde les champs texte, sans les fichiers ni les champs internes de Next', () => {
+    const fd = new FormData()
+    fd.set('businessName', 'Delgado Concrete')
+    fd.set('lat', '')
+    fd.set('file', new File(['a'], 'a.csv'))
+    fd.set('$ACTION_ID_abc123', '')
+    expect(formValues(fd)).toEqual({ businessName: 'Delgado Concrete', lat: '' })
+  })
+  it('formText rogne, et renvoie une chaîne vide si le champ manque', () => {
+    const fd = new FormData()
+    fd.set('reason', '  Ne répond plus ')
+    expect(formText(fd, 'reason')).toBe('Ne répond plus')
+    expect(formText(fd, 'absent')).toBe('')
+  })
+  it('pickEnum n’accepte que les valeurs prévues', () => {
+    const statuses = ['OPEN', 'ACCEPTED'] as const
+    expect(pickEnum('OPEN', statuses)).toBe('OPEN')
+    expect(pickEnum('DROP TABLE', statuses)).toBeUndefined()
+    expect(pickEnum(['OPEN'], statuses)).toBeUndefined()
+    expect(pickEnum(undefined, statuses)).toBeUndefined()
+  })
+})
+
+describe('actionError', () => {
+  it('relaie le message court d’un service', () => {
+    expect(actionError(new Error('Motif obligatoire'))).toBe('Motif obligatoire')
+  })
+  it('masque les erreurs techniques et les journalise', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const prismaError = Object.assign(new Error('Invalid `prisma.mission.update()` invocation'), { name: 'PrismaClientKnownRequestError' })
+    for (const e of [prismaError, new Error('ligne 1\nligne 2'), new Error('x'.repeat(300)), 'boom']) {
+      expect(actionError(e)).toBe('Erreur inattendue. Rechargez la page ; si le problème persiste, prévenez un admin.')
+    }
+    expect(spy).toHaveBeenCalledTimes(4)
+  })
+})
+
+describe('loginErrorMessage', () => {
+  it('explique un refus d’accès ou de connexion Google', () => {
+    expect(loginErrorMessage('forbidden')).toContain('Accès refusé')
+    expect(loginErrorMessage(['AccessDenied'])).toContain('@allo-chantiers.fr')
+    expect(loginErrorMessage('Configuration')).toBe('La connexion a échoué. Réessayez.')
+    expect(loginErrorMessage(undefined)).toBeNull()
+  })
+})
+```
+
+- [ ] **Step 2: Lancer les tests pour vérifier qu'ils échouent**
+
+Run: `npx vitest run app/admin/_lib`
+Expected: FAIL (modules `./format` et `./forms` introuvables).
+
+- [ ] **Step 3: Écrire `app/admin/_lib/format.ts`, `forms.ts` et `labels.ts`**
+
+`app/admin/_lib/format.ts` :
+
+```ts
+import type { MissionStatus } from '@prisma/client'
+
+// Formats et liens du back-office. Les créneaux s'affichent à l'heure du pro (formatSlot, lib/time.ts) ;
+// les horodatages internes (création, soumission, journal) à l'heure de Paris, celle de l'équipe.
+
+const DOLLARS = /^\d{1,6}(\.\d{1,2})?$/
+
+/** Saisie en dollars (« 40 », « 40.5 », « 40,50 », « $15 ») → cents ; null si illisible ou négative. */
+export function dollarsToCents(raw: string): number | null {
+  const v = raw.trim().replace(/^\$/, '').trim().replace(',', '.')
+  if (!DOLLARS.test(v)) return null
+  const [whole, decimals = ''] = v.split('.')
+  return Number(whole) * 100 + Number(decimals.padEnd(2, '0'))
+}
+
+/** 13650 → « 136,50 $ » */
+export function formatUsd(cents: number): string {
+  const abs = Math.abs(Math.round(cents))
+  return `${cents < 0 ? '-' : ''}${Math.floor(abs / 100)},${String(abs % 100).padStart(2, '0')} $`
+}
+
+/** 4050 → « 40.50 » (valeur d'un champ de saisie en dollars) */
+export function centsToDollarsInput(cents: number): string {
+  return (cents / 100).toFixed(2)
+}
+
+function zonedParts(date: Date, timeZone: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  const fmt = new Intl.DateTimeFormat('en-GB', {
+    timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+  })
+  for (const p of fmt.formatToParts(date)) out[p.type] = p.value
+  return out
+}
+
+/** « 16/10/2026 14:05 », heure de Paris. */
+export function formatParis(date: Date): string {
+  const p = zonedParts(date, 'Europe/Paris')
+  return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}`
+}
+
+/** « 16/10 10:00:05 » dans le fuseau donné (horodatages des étapes et des photos). */
+export function formatStamp(value: Date | string, timeZone: string): string {
+  const p = zonedParts(new Date(value), timeZone)
+  return `${p.day}/${p.month} ${p.hour}:${p.minute}:${p.second}`
+}
+
+export function mapsUrl(lat: number, lng: number): string {
+  return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
+}
+
+/** Une visite a été soumise : la mission se consulte dans la validation (lecture seule hors SUBMITTED). */
+export function isReviewable(status: MissionStatus): boolean {
+  return status === 'SUBMITTED' || status === 'NEEDS_FIX' || status === 'VALIDATED' || status === 'REJECTED'
+}
+
+/** Statuts qu'une annulation par l'équipe accepte (machine d'état, spec §7.2). */
+export function isCancellable(status: MissionStatus): boolean {
+  return status === 'OPEN' || status === 'ACCEPTED' || status === 'NEEDS_FIX'
+}
+
+export function missionHref(m: { id: string; proId: string; status: MissionStatus }): string {
+  return isReviewable(m.status) ? `/admin/review/${m.id}` : `/admin/pros/${m.proId}#mission-${m.id}`
+}
+```
+
+`app/admin/_lib/forms.ts` :
+
+```ts
+// Aides des server actions du back-office : lecture du FormData, messages d'erreur sûrs.
+
+/** État renvoyé par une server action à son formulaire (useActionState). */
+export type ActionState = {
+  error?: string
+  ok?: string
+  fieldErrors?: Record<string, string>
+  values?: Record<string, string> // saisie renvoyée pour la réafficher après une erreur
+  needsConfirmation?: boolean
+}
+
+/** Champs texte d'un FormData (sans les fichiers ni les champs « $ACTION… » ajoutés par Next). */
+export function formValues(fd: FormData): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const [key, value] of fd.entries()) {
+    if (typeof value === 'string' && !key.startsWith('$ACTION')) out[key] = value
+  }
+  return out
+}
+
+export function formText(fd: FormData, name: string): string {
+  const v = fd.get(name)
+  return typeof v === 'string' ? v.trim() : ''
+}
+
+/** Paramètre d'URL ou champ réduit aux valeurs permises (filtres de statut). */
+export function pickEnum<T extends string>(value: unknown, allowed: readonly T[]): T | undefined {
+  return typeof value === 'string' && (allowed as readonly string[]).includes(value) ? (value as T) : undefined
+}
+
+const UNEXPECTED = 'Erreur inattendue. Rechargez la page ; si le problème persiste, prévenez un admin.'
+
+/**
+ * Message affichable pour une erreur levée par un service. Les services lèvent des messages courts en
+ * français (« Motif obligatoire », « Transition refusée : … ») ; tout le reste (Prisma, réseau, Zod) est
+ * journalisé côté serveur et remplacé par un message générique : jamais de détail technique à l'écran.
+ */
+export function actionError(e: unknown): string {
+  if (e instanceof Error && !e.name.startsWith('Prisma') && e.message.length > 0 && e.message.length <= 200 && !e.message.includes('\n')) {
+    return e.message
+  }
+  console.error('[admin] action échouée', e)
+  return UNEXPECTED
+}
+
+/** Message de la page de connexion selon `?error=` (« forbidden » vient de requireAdmin, le reste d'Auth.js). */
+export function loginErrorMessage(code: string | string[] | undefined): string | null {
+  const c = Array.isArray(code) ? code[0] : code
+  if (!c) return null
+  if (c === 'forbidden') return 'Accès refusé : votre compte n’a pas (ou plus) accès à cette page.'
+  if (c === 'AccessDenied') return 'Connexion refusée : utilisez votre compte Google @allo-chantiers.fr, inscrit par un admin.'
+  return 'La connexion a échoué. Réessayez.'
+}
+```
+
+`app/admin/_lib/labels.ts` (importé aussi par des composants client : uniquement des `import type`) :
+
+```ts
+import type { AgentStatus, EarningStatus, EarningTier, FraudType, MissionStatus, MissionType, PhotoCategory, ProStatus } from '@prisma/client'
+
+export const PRO_STATUS_LABELS: Record<ProStatus, string> = {
+  TO_CALL: 'À appeler', AGREED: 'D’accord', MISSION_OPEN: 'Mission ouverte', VISITED: 'Visité',
+  LISTING_LIVE: 'Fiche en ligne', CLIENT: 'Client', LOST: 'Perdu',
+}
+export const MISSION_STATUS_LABELS: Record<MissionStatus, string> = {
+  OPEN: 'Ouverte', ACCEPTED: 'Acceptée', SUBMITTED: 'Soumise', NEEDS_FIX: 'Correction demandée',
+  VALIDATED: 'Validée', REJECTED: 'Rejetée', CANCELLED: 'Annulée',
+}
+export const MISSION_TYPE_LABELS: Record<MissionType, string> = { VISIT: 'Visite', RETURN_VISIT: 'Visite de retour' }
+export const AGENT_STATUS_LABELS: Record<AgentStatus, string> = {
+  APPLICANT: 'Candidat', TRAINING: 'En formation', LOCKED: 'Bloqué (quiz)', REFUSED: 'Refusé',
+  CERTIFIED: 'Certifié', ACTIVE: 'Actif', SUSPENDED: 'Suspendu',
+}
+export const FRAUD_LABELS: Record<FraudType, string> = {
+  CHECKIN_FAR: 'Check-in éloigné', DUPLICATE_PRO: 'Pro déjà visité', PHOTO_EXIF_MISMATCH: 'Photos suspectes (EXIF)',
+  PRO_DENIED: 'Le pro conteste la visite', LOW_PRO_RATING: 'Note basse du pro', NO_SHOW: 'Absence', LATE_SYNC: 'Check-in synchronisé tard',
+}
+export const TIER_LABELS: Record<EarningTier, string> = {
+  VISIT: 'Visite', LIVE: 'Fiche en ligne', CLIENT: 'Client signé', RETURN_VISIT: 'Visite de retour', URGENCY: 'Bonus urgence',
+}
+export const EARNING_STATUS_LABELS: Record<EarningStatus, string> = { PAYABLE: 'À payer', PAID: 'Payé', VOID: 'Annulé' }
+export const PHOTO_CATEGORY_LABELS: Record<PhotoCategory, string> = {
+  LOGO: 'Logo', VEHICLE: 'Véhicule', TEAM: 'Équipe', EQUIPMENT: 'Matériel', JOB: 'Chantier',
+}
+export const LEVEL_LABELS: Record<'BRONZE' | 'SILVER' | 'GOLD', string> = { BRONZE: 'Bronze', SILVER: 'Silver', GOLD: 'Gold' }
+
+export const STEP_LABELS: Record<string, string> = {
+  checkin: 'Check-in', consent: 'Accord signé', profile: 'Fiche Google', invite: 'Invitation', verification: 'Vérification', checkout: 'Départ',
+}
+// Valeurs saisies par l'agent dans la checklist (modules/missions/checklist-rule.ts).
+export const VALUE_LABELS: Record<string, string> = {
+  CREATED: 'Fiche créée',
+  CLAIMED: 'Fiche existante revendiquée',
+  INVITE_SENT: 'Invitation gestionnaire envoyée',
+  INVITE_NOT_ALLOWED_YET: 'Ajout d’utilisateurs pas encore proposé par Google',
+  VIDEO_DONE: 'Vérification vidéo faite',
+  VIDEO_NOT_OFFERED: 'Vidéo non proposée pour l’instant',
+  OTHER_METHOD_STARTED: 'Autre méthode lancée',
+}
+export const AUDIT_LABELS: Record<string, string> = {
+  'pro.create': 'Pro créé', 'pro.update': 'Pro modifié', 'pro.status': 'Statut du pro changé',
+  'mission.create': 'Mission publiée', 'mission.accepted': 'Mission acceptée', 'mission.open': 'Mission remise en ligne',
+  'mission.submitted': 'Visite soumise', 'visit.submit': 'Checklist envoyée', 'mission.validated': 'Visite validée',
+  'mission.needs_fix': 'Correction demandée', 'mission.rejected': 'Visite rejetée', 'mission.cancelled': 'Mission annulée',
+  'mission.reschedule': 'Mission replanifiée', 'mission.widen': 'Rayon élargi', 'mission.urgency_bonus': 'Bonus urgence',
+  'mission.pro_reply': 'Réponse SMS du pro', 'flag.resolve': 'Alerte résolue',
+}
+
+export const PRO_STATUSES = Object.keys(PRO_STATUS_LABELS) as ProStatus[]
+export const MISSION_STATUSES = Object.keys(MISSION_STATUS_LABELS) as MissionStatus[]
+export const AGENT_STATUSES = Object.keys(AGENT_STATUS_LABELS) as AgentStatus[]
+```
+
+- [ ] **Step 4: Lancer les tests**
+
+Run: `npx vitest run app/admin/_lib`
+Expected: PASS (16 tests dans `format.test.ts`, 6 dans `forms.test.ts`).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add app/admin/_lib
+git commit -m "feat(admin): formatting, form and label helpers"
+```
+
+### Task 66: Connexion, gabarit et tableau de bord
+
+**Files:**
+- Create: `app/admin/_components/ui.tsx`, `app/admin/_components/action-form.tsx`, `app/admin/_components/nav-links.tsx`, `app/admin/_components/audit-list.tsx`, `app/admin/_lib/run-action.ts`
+- Create: `app/admin/login/page.tsx`, `app/admin/(app)/layout.tsx`, `app/admin/(app)/page.tsx`
+
+- [ ] **Step 1: Écrire les briques d'interface (`app/admin/_components/ui.tsx`)**
+
+Composants sans état ni hook : utilisables depuis une page serveur comme depuis un composant client.
+
+```tsx
+import Link from 'next/link'
+
+export const inputClass =
+  'w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm shadow-sm focus:border-emerald-600 focus:outline-none focus:ring-1 focus:ring-emerald-600'
+export const buttonLinkClass = 'inline-block rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50'
+export const linkClass = 'text-emerald-800 underline-offset-2 hover:underline'
+export const tdClass = 'px-3 py-2 align-top'
+
+export function PageHeader({ title, back, children }: { title: string; back?: { href: string; label: string }; children?: React.ReactNode }) {
+  return (
+    <header className="mb-6">
+      {back && <Link href={back.href} className="text-sm text-gray-500 hover:underline">← {back.label}</Link>}
+      <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold">{title}</h1>
+        {children && <div className="flex flex-wrap gap-2">{children}</div>}
+      </div>
+    </header>
+  )
+}
+
+const BANNER_TONES = {
+  info: 'border-sky-200 bg-sky-50 text-sky-900',
+  success: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+  warning: 'border-amber-200 bg-amber-50 text-amber-900',
+  error: 'border-red-200 bg-red-50 text-red-900',
+}
+
+export function Banner({ tone = 'info', children }: { tone?: keyof typeof BANNER_TONES; children: React.ReactNode }) {
+  return <div role={tone === 'error' ? 'alert' : 'status'} className={`mb-4 rounded-md border px-4 py-3 text-sm ${BANNER_TONES[tone]}`}>{children}</div>
+}
+
+export function Card({ title, id, children }: { title: string; id?: string; children: React.ReactNode }) {
+  return (
+    <section id={id} className="scroll-mt-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+      <h2 className="mb-3 text-base font-semibold">{title}</h2>
+      {children}
+    </section>
+  )
+}
+
+const BADGE_TONES = { gray: 'bg-gray-100 text-gray-700', green: 'bg-emerald-100 text-emerald-800', amber: 'bg-amber-100 text-amber-800', red: 'bg-red-100 text-red-800' }
+
+export function Badge({ tone = 'gray', children }: { tone?: keyof typeof BADGE_TONES; children: React.ReactNode }) {
+  return <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${BADGE_TONES[tone]}`}>{children}</span>
+}
+
+export function Empty({ children }: { children: React.ReactNode }) {
+  return <p className="text-sm text-gray-500">{children}</p>
+}
+
+/** Champ de formulaire : libellé, contrôle, aide et erreur. */
+export function Field({ label, help, error, children }: { label: string; help?: string; error?: string; children: React.ReactNode }) {
+  return (
+    <label className="block text-sm">
+      <span className="font-medium text-gray-800">{label}</span>
+      <span className="mt-1 block">{children}</span>
+      {help && <span className="mt-1 block text-xs text-gray-500">{help}</span>}
+      {error && <span role="alert" className="mt-1 block text-xs text-red-700">{error}</span>}
+    </label>
+  )
+}
+
+export function Table({ head, children }: { head: string[]; children: React.ReactNode }) {
+  return (
+    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+      <table className="min-w-full divide-y divide-gray-200 text-sm">
+        <thead className="bg-gray-50">
+          <tr>{head.map((h, i) => <th key={i} className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-gray-500">{h}</th>)}</tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">{children}</tbody>
+      </table>
+    </div>
+  )
+}
+
+/** Filtre par statut sous forme de pastilles (paramètre ?status=). */
+export function FilterLinks<T extends string>({ base, hash = '', current, options, labels }: { base: string; hash?: string; current?: T; options: readonly T[]; labels: Record<T, string> }) {
+  const cls = (active: boolean) =>
+    active ? 'rounded-full bg-gray-900 px-3 py-1 text-white' : 'rounded-full bg-white px-3 py-1 text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50'
+  return (
+    <nav className="mb-3 flex flex-wrap gap-2 text-sm">
+      <Link href={`${base}${hash}`} className={cls(!current)}>Tous</Link>
+      {options.map((o) => <Link key={o} href={`${base}?status=${o}${hash}`} className={cls(current === o)}>{labels[o]}</Link>)}
+    </nav>
+  )
+}
+```
+
+- [ ] **Step 2: Écrire le formulaire relié à une action, la navigation, le journal et `runAction`**
+
+`app/admin/_components/action-form.tsx` :
+
+```tsx
+'use client'
+
+import { useActionState } from 'react'
+import { useFormStatus } from 'react-dom'
+import type { ActionState } from '@/app/admin/_lib/forms'
+
+export type FormAction = (prev: ActionState, formData: FormData) => Promise<ActionState>
+
+const TONES = {
+  primary: 'bg-emerald-700 text-white hover:bg-emerald-800',
+  secondary: 'border border-gray-300 bg-white text-gray-800 hover:bg-gray-50',
+  danger: 'bg-red-700 text-white hover:bg-red-800',
+}
+
+/** Bouton d'envoi, désactivé pendant l'exécution de la server action (évite le double clic). */
+export function SubmitButton({ tone = 'primary', children }: { tone?: keyof typeof TONES; children: React.ReactNode }) {
+  const { pending } = useFormStatus()
+  return (
+    <button type="submit" disabled={pending} className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium disabled:opacity-50 ${TONES[tone]}`}>
+      {pending ? 'Patientez…' : children}
+    </button>
+  )
+}
+
+/** Formulaire relié à une server action : affiche le message d'erreur ou de succès qu'elle renvoie. */
+export function ActionForm({ action, className = 'flex flex-wrap items-center gap-2', children }: { action: FormAction; className?: string; children: React.ReactNode }) {
+  const [state, formAction] = useActionState(action, {})
+  return (
+    <form action={formAction}>
+      <div className={className}>{children}</div>
+      {state.error && <p role="alert" className="mt-1 text-sm text-red-700">{state.error}</p>}
+      {state.ok && <p role="status" className="mt-1 text-sm text-emerald-700">{state.ok}</p>}
+    </form>
+  )
+}
+```
+
+`app/admin/_components/nav-links.tsx` :
+
+```tsx
+'use client'
+
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+
+export function NavLinks({ items }: { items: { href: string; label: string }[] }) {
+  const pathname = usePathname()
+  return (
+    <nav className="flex flex-col gap-0.5 px-2">
+      {items.map((item) => {
+        const active = item.href === '/admin' ? pathname === '/admin' : pathname.startsWith(item.href)
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            aria-current={active ? 'page' : undefined}
+            className={`rounded-md px-3 py-2 text-sm ${active ? 'bg-emerald-50 font-medium text-emerald-900' : 'text-gray-700 hover:bg-gray-100'}`}
+          >
+            {item.label}
+          </Link>
+        )
+      })}
+    </nav>
+  )
+}
+```
+
+`app/admin/_components/audit-list.tsx` :
+
+```tsx
+import type { AuditLog, ProStatus } from '@prisma/client'
+import { formatParis } from '@/app/admin/_lib/format'
+import { AUDIT_LABELS, PRO_STATUS_LABELS } from '@/app/admin/_lib/labels'
+
+/** Journal des actions (AuditLog), la plus récente en premier. */
+export function AuditList({ entries }: { entries: AuditLog[] }) {
+  if (entries.length === 0) return <p className="text-sm text-gray-500">Aucune action enregistrée.</p>
+  return (
+    <ol className="space-y-2 text-sm">
+      {entries.map((e) => {
+        const to = (e.data as Record<string, unknown> | null)?.to
+        return (
+          <li key={e.id} className="border-l-2 border-gray-200 pl-3">
+            <p className="font-medium">
+              {AUDIT_LABELS[e.action] ?? e.action}
+              {typeof to === 'string' && ` → ${PRO_STATUS_LABELS[to as ProStatus] ?? to}`}
+            </p>
+            <p className="text-xs text-gray-500">{formatParis(e.createdAt)} · {e.actor}</p>
+            {e.reason && <p className="text-xs text-gray-700">Motif : {e.reason}</p>}
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+```
+
+`app/admin/_lib/run-action.ts` (utilisé par les actions qui ne redirigent pas) :
+
+```ts
+import { revalidatePath } from 'next/cache'
+import { actionError, type ActionState } from './forms'
+
+/** Exécute une mutation, renvoie l'erreur affichable ou le message de succès, et rafraîchit le back-office. */
+export async function runAction(task: () => Promise<unknown>, ok: string): Promise<ActionState> {
+  try {
+    await task()
+  } catch (e) {
+    return { error: actionError(e) }
+  }
+  revalidatePath('/admin', 'layout')
+  return { ok }
+}
+```
+
+- [ ] **Step 3: Écrire la page de connexion (`app/admin/login/page.tsx`)**
+
+Publique (le proxy la laisse passer) et hors du groupe `(app)` : pas de barre latérale, pas de boucle de redirection.
+
+```tsx
+import { redirect } from 'next/navigation'
+import { loginErrorMessage } from '@/app/admin/_lib/forms'
+import { signIn } from '@/lib/auth'
+import { currentAdmin } from '@/lib/session'
+
+export const metadata = { title: 'Connexion — back-office' }
+
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> }
+
+export default async function AdminLoginPage({ searchParams }: Props) {
+  const { error } = await searchParams
+  if (!error && (await currentAdmin())) redirect('/admin')
+  const message = loginErrorMessage(error)
+
+  async function login() {
+    'use server'
+    await signIn('google', { redirectTo: '/admin' })
+  }
+
+  return (
+    <div lang="fr" className="flex min-h-dvh items-center justify-center bg-gray-50 px-4 text-gray-900">
+      <main className="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
+        <h1 className="text-xl font-semibold">Back-office agents terrain</h1>
+        <p className="mt-1 text-sm text-gray-600">Réservé à l’équipe, avec votre compte Google @allo-chantiers.fr.</p>
+        {message && <p role="alert" className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-800">{message}</p>}
+        <form action={login} className="mt-6">
+          <button type="submit" className="w-full rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800">
+            Se connecter avec Google
+          </button>
+        </form>
+      </main>
+    </div>
+  )
+}
+```
+
+- [ ] **Step 4: Écrire le gabarit protégé (`app/admin/(app)/layout.tsx`)**
+
+```tsx
+import { redirect } from 'next/navigation'
+import { NavLinks } from '@/app/admin/_components/nav-links'
+import { signOut } from '@/lib/auth'
+import { currentAdmin } from '@/lib/session'
+
+export const metadata = { title: 'Back-office' }
+
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  const admin = await currentAdmin()
+  if (!admin) redirect('/admin/login?error=forbidden')
+
+  async function logout() {
+    'use server'
+    await signOut({ redirectTo: '/admin/login' })
+  }
+
+  const items = [
+    { href: '/admin', label: 'Tableau de bord' },
+    { href: '/admin/pros', label: 'Pros' },
+    { href: '/admin/missions', label: 'Missions' },
+    { href: '/admin/review', label: 'Validation' },
+    { href: '/admin/agents', label: 'Agents' },
+    { href: '/admin/sms', label: 'SMS reçus' },
+    ...(admin.role === 'ADMIN' ? [{ href: '/admin/settings', label: 'Réglages' }] : []),
+  ]
+
+  return (
+    <div lang="fr" className="flex min-h-dvh bg-gray-50 text-gray-900">
+      <aside className="sticky top-0 flex h-dvh w-56 shrink-0 flex-col border-r border-gray-200 bg-white">
+        <p className="px-5 py-5 text-sm font-semibold">Back-office agents</p>
+        <NavLinks items={items} />
+        <div className="mt-auto border-t border-gray-200 p-4 text-xs text-gray-600">
+          <p className="truncate" title={admin.email}>{admin.email}</p>
+          <p className="mt-0.5">{admin.role === 'ADMIN' ? 'Admin' : 'Setter'}</p>
+          <form action={logout} className="mt-2">
+            <button type="submit" className="text-emerald-800 underline">Se déconnecter</button>
+          </form>
+        </div>
+      </aside>
+      <main className="min-w-0 flex-1 p-6">{children}</main>
+    </div>
+  )
+}
+```
+
+- [ ] **Step 5: Écrire le tableau de bord (`app/admin/(app)/page.tsx`)**
+
+```tsx
+import Link from 'next/link'
+import { PageHeader } from '@/app/admin/_components/ui'
+import { requireAdmin } from '@/lib/session'
+import { listAgents } from '@/modules/agents'
+import { adminBoards } from '@/modules/missions'
+import { listInbound, listQueue } from '@/modules/review'
+
+export default async function AdminDashboardPage() {
+  await requireAdmin()
+  const [queue, boards, inbound, locked] = await Promise.all([listQueue(), adminBoards(), listInbound({ handled: false }), listAgents({ status: 'LOCKED' })])
+  const tiles = [
+    { label: 'Visites à valider', count: queue.length, href: '/admin/review' },
+    { label: 'Missions non prises depuis plus de 48 h', count: boards.untaken.length, href: '/admin/missions#non-prises' },
+    { label: 'Missions à replanifier (créneau passé)', count: boards.toReschedule.length, href: '/admin/missions#a-replanifier' },
+    { label: 'Visites sans nouvelles', count: boards.silent.length, href: '/admin/missions#sans-nouvelles' },
+    { label: 'SMS reçus non traités', count: inbound.length, href: '/admin/sms' },
+    { label: 'Agents bloqués au quiz', count: locked.length, href: '/admin/agents?status=LOCKED' },
+  ]
+  return (
+    <>
+      <PageHeader title="Tableau de bord" />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {tiles.map((t) => (
+          <Link
+            key={t.href}
+            href={t.href}
+            className={`rounded-lg border p-4 shadow-sm hover:shadow ${t.count > 0 ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-white'}`}
+          >
+            <p className="text-3xl font-semibold">{t.count}</p>
+            <p className="mt-1 text-sm text-gray-700">{t.label}</p>
+          </Link>
+        ))}
+      </div>
+    </>
+  )
+}
+```
+
+- [ ] **Step 6: Vérifier le typage et le lint**
+
+Run: `npx tsc --noEmit && npm run lint`
+Expected: aucune erreur.
+
+- [ ] **Step 7: Vérification manuelle**
+
+Run: `npm run dev`, puis dans une fenêtre de navigation privée :
+- `http://localhost:3000/admin` → redirigé vers `/admin/login` (proxy) ; la page montre « Se connecter avec Google », sans barre latérale.
+- `http://localhost:3000/admin/login?error=AccessDenied` → encadré rouge citant « @allo-chantiers.fr » ; `?error=forbidden` → « Accès refusé… ».
+- Se connecter avec Google → barre latérale à 7 entrées dont « Réglages », email et « Admin » en bas ; l'inspecteur montre `lang="fr"` sur le conteneur.
+- Tableau de bord : six tuiles (à 0 sur une base vide ; fond ambré dès qu'une tuile compte quelque chose). Leurs pages arrivent aux chunks 16 et 17 (404 d'ici là).
+- `npm run admin:add -- marvin@allo-chantiers.fr SETTER`, recharger : « Réglages » disparaît, « Setter » s'affiche. Remettre `ADMIN` ensuite.
+- « Se déconnecter » → `/admin/login` ; `/admin` redirige de nouveau vers la connexion.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add app/admin
+git commit -m "feat(admin): Google sign-in page, admin shell and dashboard"
+```
+
+### Task 67: Server actions et formulaires partagés des pros et des missions
+
+**Files:**
+- Create: `app/admin/(app)/pros/csv-input.ts`, `app/admin/(app)/pros/actions.ts`, `app/admin/(app)/pros/[id]/mission-form.tsx`, `app/admin/(app)/missions/actions.ts`, `app/admin/(app)/missions/cancel-form.tsx`
+- Test: `app/admin/(app)/pros/csv-input.test.ts`
+
+- [ ] **Step 1: Écrire le test qui échoue (`app/admin/(app)/pros/csv-input.test.ts`)**
+
+```ts
+import { describe, expect, it } from 'vitest'
+import { MAX_CSV_BYTES, readCsvInput } from './csv-input'
+
+const HEADER = 'business_name,phone,address,city,state,zip,trade\n'
+const ROW = 'Acme Fence,6175550142,1 Main St,Boston,MA,02108,Fence\n'
+
+describe('readCsvInput', () => {
+  it('préfère le fichier au texte collé, sans le BOM d’Excel', async () => {
+    const fd = new FormData()
+    fd.set('csv', 'ignoré')
+    fd.set('file', new File([`﻿${HEADER}${ROW}`], 'pros.csv', { type: 'text/csv' }))
+    expect(await readCsvInput(fd)).toEqual({ ok: true, csv: `${HEADER}${ROW}` })
+  })
+  it('prend le texte collé quand aucun fichier n’est choisi (le navigateur envoie un fichier vide)', async () => {
+    const fd = new FormData()
+    fd.set('csv', `﻿${HEADER}`)
+    fd.set('file', new File([], ''))
+    expect(await readCsvInput(fd)).toEqual({ ok: true, csv: HEADER })
+  })
+  it('refuse un envoi vide ou trop gros', async () => {
+    expect(await readCsvInput(new FormData())).toEqual({ ok: false, error: 'Collez le contenu du CSV ou choisissez un fichier.' })
+    const big = new FormData()
+    big.set('file', new File(['x'.repeat(MAX_CSV_BYTES + 1)], 'big.csv'))
+    expect(await readCsvInput(big)).toEqual({ ok: false, error: 'Fichier trop gros : 500 Ko au plus.' })
+  })
+})
+```
+
+- [ ] **Step 2: Lancer le test pour vérifier qu'il échoue**
+
+Run: `npx vitest run "app/admin/(app)/pros/csv-input.test.ts"`
+Expected: FAIL (module `./csv-input` introuvable).
+
+- [ ] **Step 3: Écrire `app/admin/(app)/pros/csv-input.ts`**
+
+```ts
+import type { ActionState } from '@/app/admin/_lib/forms'
+
+export const MAX_CSV_BYTES = 500_000 // sous la limite de 1 Mo du corps d'une server action
+
+export type ImportState = ActionState & {
+  result?: { created: number; withoutCoords: number; errors: { line: number; message: string }[] }
+}
+
+/** Contenu à importer : le fichier s'il y en a un, sinon le texte collé. Retire le BOM qu'ajoute Excel. */
+export async function readCsvInput(fd: FormData): Promise<{ ok: true; csv: string } | { ok: false; error: string }> {
+  const file = fd.get('file')
+  let csv: string
+  if (file instanceof File && file.size > 0) {
+    if (file.size > MAX_CSV_BYTES) return { ok: false, error: 'Fichier trop gros : 500 Ko au plus.' }
+    csv = await file.text()
+  } else {
+    const text = fd.get('csv')
+    csv = typeof text === 'string' ? text : ''
+    if (csv.length > MAX_CSV_BYTES) return { ok: false, error: 'Texte trop long : 500 Ko au plus.' }
+  }
+  csv = csv.replace(/^﻿/, '')
+  if (!csv.trim()) return { ok: false, error: 'Collez le contenu du CSV ou choisissez un fichier.' }
+  return { ok: true, csv }
+}
+```
+
+- [ ] **Step 4: Lancer le test**
+
+Run: `npx vitest run "app/admin/(app)/pros/csv-input.test.ts"`
+Expected: PASS (3 tests).
+
+- [ ] **Step 5: Écrire `app/admin/(app)/pros/actions.ts`**
+
+```ts
+'use server'
+
+import type { ProStatus } from '@prisma/client'
+import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
+import { actionError, formText, formValues, pickEnum, type ActionState } from '@/app/admin/_lib/forms'
+import { requireAdmin } from '@/lib/session'
+import { createMission, createPro, importPros, setProStatus, updatePro } from '@/modules/missions'
+import { readCsvInput, type ImportState } from './csv-input'
+
+// Statuts qu'un setter pose lui-même ; le service vérifie la transition (spec §7.3).
+const MANUAL_STATUSES: readonly ProStatus[] = ['TO_CALL', 'AGREED', 'LOST']
+
+export async function createProAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const admin = await requireAdmin()
+  const values = formValues(fd)
+  let proId: string
+  try {
+    const r = await createPro(values, admin.email)
+    if (!r.ok) return { fieldErrors: r.fieldErrors, values }
+    proId = r.pro.id
+  } catch (e) {
+    return { error: actionError(e), values }
+  }
+  revalidatePath('/admin', 'layout')
+  redirect(`/admin/pros/${proId}?notice=created`)
+}
+
+export async function updateProAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const admin = await requireAdmin()
+  const values = formValues(fd)
+  const proId = formText(fd, 'proId')
+  try {
+    const r = await updatePro(proId, values, admin.email)
+    if (!r.ok) return { fieldErrors: r.fieldErrors, values }
+  } catch (e) {
+    return { error: actionError(e), values }
+  }
+  revalidatePath('/admin', 'layout')
+  redirect(`/admin/pros/${proId}?notice=updated`)
+}
+
+export async function importProsAction(_prev: ImportState, fd: FormData): Promise<ImportState> {
+  const admin = await requireAdmin()
+  const input = await readCsvInput(fd)
+  if (!input.ok) return { error: input.error }
+  try {
+    const result = await importPros(input.csv, admin.email)
+    revalidatePath('/admin', 'layout')
+    return { result }
+  } catch (e) {
+    return { error: actionError(e) }
+  }
+}
+
+export async function setProStatusAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const admin = await requireAdmin()
+  const to = pickEnum(formText(fd, 'to'), MANUAL_STATUSES)
+  if (!to) return { error: 'Statut inconnu.' }
+  try {
+    await setProStatus(formText(fd, 'proId'), to, admin.email, formText(fd, 'reason') || undefined)
+  } catch (e) {
+    return { error: actionError(e) }
+  }
+  revalidatePath('/admin', 'layout')
+  return { ok: 'Statut mis à jour.' }
+}
+
+export async function createMissionAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const admin = await requireAdmin()
+  const values = formValues(fd)
+  const proId = formText(fd, 'proId')
+  try {
+    const r = await createMission(proId, values, admin.email)
+    if (!r.ok) return { error: r.error, values }
+  } catch (e) {
+    return { error: actionError(e), values }
+  }
+  revalidatePath('/admin', 'layout')
+  redirect(`/admin/pros/${proId}?notice=mission`)
+}
+```
+
+- [ ] **Step 6: Écrire `app/admin/(app)/missions/actions.ts` et le formulaire d'annulation**
+
+`app/admin/(app)/missions/actions.ts` :
+
+```ts
+'use server'
+
+import { dollarsToCents, formatUsd } from '@/app/admin/_lib/format'
+import { formText, type ActionState } from '@/app/admin/_lib/forms'
+import { runAction } from '@/app/admin/_lib/run-action'
+import { requireAdmin } from '@/lib/session'
+import { cancelMission, rescheduleMission, setUrgencyBonus, widenMission } from '@/modules/missions'
+
+export async function widenMissionAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const admin = await requireAdmin()
+  const miles = Number(formText(fd, 'miles'))
+  return runAction(() => widenMission(formText(fd, 'missionId'), miles, admin.email), `Rayon de diffusion élargi à ${miles} miles.`)
+}
+
+export async function urgencyBonusAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const admin = await requireAdmin()
+  const cents = dollarsToCents(formText(fd, 'dollars'))
+  if (cents == null) return { error: 'Montant invalide (ex. 15 ou 15.50).' }
+  return runAction(() => setUrgencyBonus(formText(fd, 'missionId'), cents, admin.email), `Bonus urgence : ${formatUsd(cents)}.`)
+}
+
+export async function rescheduleMissionAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const admin = await requireAdmin()
+  return runAction(async () => {
+    const r = await rescheduleMission(formText(fd, 'missionId'), formText(fd, 'slotLocal'), admin.email)
+    if (!r.ok) throw new Error(r.error)
+  }, 'Mission replanifiée et republiée.')
+}
+
+export async function cancelMissionAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const admin = await requireAdmin()
+  const markProLost = fd.get('markProLost') === 'on'
+  return runAction(() => cancelMission(formText(fd, 'missionId'), admin.email, formText(fd, 'reason'), markProLost), 'Mission annulée.')
+}
+```
+
+`app/admin/(app)/missions/cancel-form.tsx` (composant serveur, utilisé par la page des missions et la fiche pro) :
+
+```tsx
+import { ActionForm, SubmitButton } from '@/app/admin/_components/action-form'
+import { inputClass } from '@/app/admin/_components/ui'
+import { cancelMissionAction } from './actions'
+
+/** Annulation d'une mission : motif obligatoire, option « pro perdu » (annule aussi ses autres missions). */
+export function CancelMissionForm({ missionId }: { missionId: string }) {
+  return (
+    <details className="mt-1 text-sm">
+      <summary className="cursor-pointer text-red-700">Annuler la mission</summary>
+      <ActionForm action={cancelMissionAction} className="mt-2 space-y-2">
+        <input type="hidden" name="missionId" value={missionId} />
+        <input name="reason" required placeholder="Motif (ex. le pro a annulé par SMS)" aria-label="Motif de l’annulation" className={inputClass} />
+        <label className="flex items-center gap-2 text-xs">
+          <input type="checkbox" name="markProLost" /> Marquer le pro perdu
+        </label>
+        <SubmitButton tone="danger">Confirmer l’annulation</SubmitButton>
+      </ActionForm>
+    </details>
+  )
+}
+```
+
+- [ ] **Step 7: Écrire le formulaire de mission (`app/admin/(app)/pros/[id]/mission-form.tsx`)**
+
+Utilisé par la fiche pro (Task 69) quand le pro est « d’accord ».
+
+```tsx
+'use client'
+
+import { useActionState } from 'react'
+import { SubmitButton } from '@/app/admin/_components/action-form'
+import { Field, inputClass } from '@/app/admin/_components/ui'
+import { createMissionAction } from '../actions'
+
+export function MissionForm({ proId, timeZone, defaultCategory }: { proId: string; timeZone: string; defaultCategory: string }) {
+  const [state, formAction] = useActionState(createMissionAction, {})
+  const v = state.values ?? {}
+  return (
+    <form action={formAction} className="space-y-3">
+      <input type="hidden" name="proId" value={proId} />
+      <Field label={`Créneau, à l’heure locale du pro (${timeZone})`}>
+        <input type="datetime-local" name="slotLocal" required defaultValue={v.slotLocal} className={inputClass} />
+      </Field>
+      <Field label="Catégorie Google suggérée" help="En anglais, comme dans Google (ex. Concrete contractor).">
+        <input name="suggestedCategory" required defaultValue={v.suggestedCategory ?? defaultCategory} className={inputClass} />
+      </Field>
+      <Field label="Consignes pour l’agent" help="En anglais, une consigne par ligne : l’agent les lit telles quelles.">
+        <textarea name="instructions" rows={4} maxLength={1000} defaultValue={v.instructions} className={inputClass} />
+      </Field>
+      {state.error && <p role="alert" className="text-sm text-red-700">{state.error}</p>}
+      <SubmitButton>Publier la mission</SubmitButton>
+    </form>
+  )
+}
+```
+
+- [ ] **Step 8: Vérifier et commit**
+
+Run: `npx tsc --noEmit && npm run lint`
+Expected: aucune erreur. (Les actions sont vérifiées à la main avec leurs pages, Tasks 69 à 77.)
+
+```bash
+git add "app/admin/(app)/pros" "app/admin/(app)/missions"
+git commit -m "feat(admin): server actions and shared forms for pros and missions"
+```
+
+## Chunk 20: Back-office — données de démo, écrans des pros et des missions, SMS reçus
+
+Mêmes règles qu’au chunk 15. Les vérifications manuelles s’appuient désormais sur le jeu de démo du Task 68.
+
+### Task 68: Données de démonstration (`scripts/seed-dev.ts`)
+
+Pour tester sans saisir les données à la main ni passer par Google OAuth : le script crée un jeu de démo et affiche deux lignes à coller dans la console du navigateur, qui posent un cookie de session Auth.js signé avec `AUTH_SECRET` (admin ou agent). Il refuse de tourner en production ou sur une base non locale. Photos et signature factices : de petits PNG embarqués (clés `.png`, servies en `image/png` par `/api/files`).
+
+Contenu : un admin (`marvin@allo-chantiers.fr` par défaut, ou l'email passé en argument), un agent ACTIVE (Maya), 3 pros, 2 missions (une SUBMITTED avec checklist complète, 10 photos et signature, note du pro 2/5 → alerte `LOW_PRO_RATING` ; une OPEN publiée il y a 72 h → encart « Non prises »). En plus, pour les écrans correspondants : un agent LOCKED avec 3 tentatives de quiz et un SMS reçu non traité.
+
+**Files:**
+- Create: `scripts/seed-guard.ts`, `scripts/seed-dev.ts`
+- Modify: `package.json` (script `seed:dev`)
+- Test: `scripts/seed-guard.test.ts`
+
+- [ ] **Step 1: Écrire le test qui échoue (`scripts/seed-guard.test.ts`)**
+
+```ts
+import { describe, expect, it } from 'vitest'
+import { assertSeedAllowed } from './seed-guard'
+
+describe('assertSeedAllowed', () => {
+  it('accepte une base locale hors production', () => {
+    expect(() => assertSeedAllowed({ NODE_ENV: 'development', DATABASE_URL: 'postgresql://marvin@localhost:5432/agents_terrain' })).not.toThrow()
+  })
+  it('refuse la production et une base distante', () => {
+    expect(() => assertSeedAllowed({ NODE_ENV: 'production', DATABASE_URL: 'postgresql://marvin@localhost:5432/agents_terrain' })).toThrow('production')
+    expect(() => assertSeedAllowed({ DATABASE_URL: 'postgresql://app:pw@db.example.com:5432/agents_terrain' })).toThrow('base non locale')
+    expect(() => assertSeedAllowed({})).toThrow('base non locale')
+  })
+})
+```
+
+Run: `npx vitest run scripts/seed-guard.test.ts`
+Expected: FAIL (module `./seed-guard` introuvable).
+
+- [ ] **Step 2: Écrire `scripts/seed-guard.ts`**
+
+```ts
+/** Garde-fou du jeu de démo : jamais en production, jamais ailleurs que sur une base locale. */
+export function assertSeedAllowed(env: Record<string, string | undefined>): void {
+  if (env.NODE_ENV === 'production') throw new Error('seed-dev refusé : NODE_ENV=production')
+  let host = ''
+  try {
+    host = new URL(env.DATABASE_URL ?? '').hostname
+  } catch {
+    host = ''
+  }
+  if (host !== 'localhost' && host !== '127.0.0.1') throw new Error(`seed-dev refusé : base non locale (${host || 'DATABASE_URL absente'})`)
+}
+```
+
+Run: `npx vitest run scripts/seed-guard.test.ts`
+Expected: PASS (2 tests).
+
+- [ ] **Step 3: Écrire `scripts/seed-dev.ts`**
+
+```ts
+// Données de démonstration pour tester le back-office et l'espace agent en local, sans Google OAuth.
+// Usage : npm run seed:dev [-- prenom@allo-chantiers.fr]
+// Refuse de tourner en production ou sur une base non locale. Ne supprime jamais rien : si les données
+// de démo existent déjà, le script ne fait que réafficher les lignes de connexion.
+import { randomUUID } from 'node:crypto'
+import * as dotenv from 'dotenv'
+import { assertSeedAllowed } from './seed-guard'
+
+dotenv.config({ path: '.env.local' })
+
+const H = 3_600_000
+const WEEK_S = 7 * 24 * 3600
+const COOKIE = 'authjs.session-token' // nom du cookie Auth.js quand l'app est servie en HTTP (localhost)
+const DEMO_AGENT_EMAIL = 'maya.demo@example.com'
+const fileId = () => randomUUID().replaceAll('-', '')
+const png = (base64: string) => Buffer.from(base64, 'base64')
+
+// PNG minuscules : bandes de couleur 8×6 par catégorie de photo, trait sinueux 120×40 pour la signature.
+const PHOTO_PNG: Record<'LOGO' | 'VEHICLE' | 'TEAM' | 'EQUIPMENT' | 'JOB', string> = {
+  LOGO: 'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAIAAABxZ0isAAAAJElEQVR42mOQi1oARCkLngERMpsBqyiQwYBVFCqB1TQGku0AAAWpSDH2K/uvAAAAAElFTkSuQmCC',
+  VEHICLE: 'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAIAAABxZ0isAAAAJElEQVR42mNYYKMBRM+a8oAImc2AVRTIYMAqCpXAahoDyXYAABs6RHFdlQAGAAAAAElFTkSuQmCC',
+  TEAM: 'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAIAAABxZ0isAAAAJElEQVR42mPQaAoAorwT04AImc2AVRTIYMAqCpXAahoDyXYAAHCLQpHshQALAAAAAElFTkSuQmCC',
+  EQUIPMENT: 'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAIAAABxZ0isAAAAJElEQVR42mOoSNEAon2r8oAImc2AVRTIYMAqCpXAahoDyXYAABO6RHHbziwhAAAAAElFTkSuQmCC',
+  JOB: 'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAIAAABxZ0isAAAAH0lEQVR42mOIAoMFYIDMZsAqCmQwYBWFSmA1jYFkOwCRWkZRddzX8AAAAABJRU5ErkJggg==',
+}
+const SIGNATURE_PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAAHgAAAAoCAAAAAAQgWH5AAAA30lEQVR42u2XUQ6EIAwF5yS9/y3dZE02aij0PUw2UfhS6DiiSCvbnxpLvMTvFsfeXNcJR+Zc9QXHAR3zFUcCD5dwvMcjBDA7U7S/M8pk5z60u947sLyaOVo4nlcyN3FM8Nvte0uLK5taccpJGLa3aM6C8L0lcxpC+N6COQ9ggA6HwxxmNKVt7ol00uL0S/TG6A0Xl62F00FrH2p4OL2dKSZ2phFOGjO3Fw9xsigl7zk4ecYUE72YurilwjBwzsVYo1CRi5sazl1lZIg4TXamXi/iNFj7t0TB10/bEj9P/AHiCF6C6OIS2QAAAABJRU5ErkJggg=='
+
+/** Ligne à coller dans la console du navigateur, sur http://localhost:3000, pour ouvrir une session. */
+async function cookieLine(token: Record<string, unknown>): Promise<string> {
+  const { encode } = await import('next-auth/jwt')
+  const jwt = await encode({ token, secret: process.env.AUTH_SECRET!, salt: COOKIE, maxAge: WEEK_S })
+  return `document.cookie = "${COOKIE}=${jwt}; path=/; max-age=${WEEK_S}"`
+}
+
+async function main() {
+  try {
+    assertSeedAllowed(process.env)
+    if (!process.env.AUTH_SECRET) throw new Error('AUTH_SECRET manquant dans .env.local')
+  } catch (e) {
+    console.error((e as Error).message)
+    process.exit(1)
+  }
+  const adminEmail = (process.argv[2] ?? 'marvin@allo-chantiers.fr').toLowerCase()
+
+  // Imports après dotenv : DATABASE_URL et STORAGE_DIR doivent être chargés.
+  const { prisma } = await import('../lib/prisma')
+  const { getStorage } = await import('../modules/storage')
+  const { refreshFraudFlags } = await import('../modules/review')
+  const { CONSENT_VERSION } = await import('../modules/missions')
+  const { CONTRACT_VERSION } = await import('../modules/contract')
+
+  await prisma.adminUser.upsert({ where: { email: adminEmail }, create: { email: adminEmail, role: 'ADMIN' }, update: { role: 'ADMIN' } })
+
+  let maya = await prisma.agent.findUnique({ where: { email: DEMO_AGENT_EMAIL } })
+  if (maya) {
+    console.log('Données de démo déjà présentes : rien de créé.')
+  } else {
+    const now = Date.now()
+    const at = (hours: number) => new Date(now + hours * H)
+    const boston = { timeZone: 'America/New_York', state: 'MA' }
+    maya = await prisma.agent.create({
+      data: {
+        firstName: 'Maya', lastName: 'Thompson-Okafor', email: DEMO_AGENT_EMAIL, phone: '+16175550101', birthDate: new Date('2005-03-14'),
+        zip: '02116', lat: 42.3496, lng: -71.0746, radiusMiles: 25, hasCar: true, availability: ['mon-am', 'wed-pm', 'sat-am'],
+        status: 'ACTIVE', phoneVerifiedAt: at(-300), contractVersion: CONTRACT_VERSION, contractSignedAt: at(-240),
+        contractSignedName: 'Maya Thompson-Okafor', contractIp: '127.0.0.1',
+      },
+    })
+    const sam = await prisma.agent.create({
+      data: {
+        firstName: 'Sam', lastName: 'Rivera', email: 'sam.demo@example.com', phone: '+16175550102', birthDate: new Date('2003-08-02'),
+        zip: '02130', lat: 42.3097, lng: -71.1151, radiusMiles: 15, hasCar: false, availability: ['sat-am', 'sun-am'],
+        status: 'LOCKED', phoneVerifiedAt: at(-100), failedAttempts: 3, lastAttemptAt: at(-2),
+      },
+    })
+    for (const [i, score] of [55, 60, 65].entries()) {
+      await prisma.trainingAttempt.create({ data: { agentId: sam.id, score, passed: false, answers: {}, createdAt: at(-2 - (2 - i) * 25) } })
+    }
+
+    const delgado = await prisma.pro.create({
+      data: {
+        ...boston, businessName: 'Delgado Concrete & Masonry Restoration Services LLC', contactName: 'Frank Delgado', phone: '+16175550142',
+        address: '120 Tremont Street', city: 'Boston', zip: '02108', lat: 42.3564, lng: -71.0621, trade: 'Concrete contractor',
+        status: 'MISSION_OPEN', notes: 'Appelé le 12/10 : d’accord pour une visite le matin.\nParle anglais et espagnol.',
+      },
+    })
+    const fence = await prisma.pro.create({
+      data: {
+        ...boston, businessName: 'Back Bay Fence & Gate Co.', contactName: 'Linda Park', phone: '+16175550143', address: '45 Newbury Street',
+        city: 'Boston', zip: '02116', lat: 42.3519, lng: -71.0747, trade: 'Fence contractor', status: 'MISSION_OPEN',
+      },
+    })
+    await prisma.pro.create({
+      data: {
+        ...boston, businessName: 'Jamaica Plain Roofing & Gutters', contactName: 'Dave O’Brien', phone: '+16175550144', address: '700 Centre Street',
+        city: 'Jamaica Plain', zip: '02130', lat: 42.3118, lng: -71.1146, trade: 'Roofing contractor', status: 'AGREED',
+      },
+    })
+
+    // Visite d'hier, soumise, note du pro 2/5 → alerte LOW_PRO_RATING (confirmation exigée pour valider).
+    const slot = at(-26)
+    const visit = await prisma.mission.create({
+      data: {
+        proId: delgado.id, agentId: maya.id, status: 'SUBMITTED', slotAt: slot, publishedAt: at(-120), acceptedAt: at(-96),
+        submittedAt: at(-25), postVisitSmsAt: at(-25), proRating: 2, suggestedCategory: 'Concrete contractor',
+        instructions: 'Owner speaks English and Spanish\nAsk for a photo of the mixer truck',
+      },
+    })
+    const step = (minutes: number) => {
+      const clientAt = new Date(slot.getTime() + minutes * 60_000)
+      return { clientAt: clientAt.toISOString(), receivedAt: new Date(clientAt.getTime() + 3000).toISOString() }
+    }
+    const signatureKey = `missions/${visit.id}/signature-${fileId()}.png`
+    await getStorage().put(signatureKey, png(SIGNATURE_PNG))
+    const submission = await prisma.submission.create({
+      data: {
+        missionId: visit.id,
+        steps: {
+          checkin: { lat: 42.3567, lng: -71.0624, accuracy: 12, ...step(2) },
+          consent: { signerName: 'Frank Delgado', textVersion: CONSENT_VERSION, signatureKey, ...step(10) },
+          profile: { listingName: 'Delgado Concrete & Masonry', category: 'Concrete contractor', city: 'Boston', zip: '02108', mode: 'CREATED', ...step(25) },
+          invite: { result: 'INVITE_SENT', ...step(30) },
+          verification: { result: 'VIDEO_NOT_OFFERED', ...step(40) },
+          checkout: step(45),
+        },
+      },
+    })
+    for (const category of ['LOGO', 'LOGO', 'VEHICLE', 'VEHICLE', 'TEAM', 'TEAM', 'EQUIPMENT', 'EQUIPMENT', 'JOB', 'JOB'] as const) {
+      const storageKey = `missions/${visit.id}/photos/${fileId()}.png`
+      await getStorage().put(storageKey, png(PHOTO_PNG[category]))
+      const { clientAt, receivedAt } = step(20)
+      await prisma.photo.create({ data: { submissionId: submission.id, storageKey, category, clientAt: new Date(clientAt), receivedAt: new Date(receivedAt) } })
+    }
+    await refreshFraudFlags(visit.id)
+
+    // Mission publiée il y a 72 h, sans preneur → encart « Non prises ».
+    const open = await prisma.mission.create({
+      data: { proId: fence.id, status: 'OPEN', slotAt: at(48), publishedAt: at(-72), suggestedCategory: 'Fence contractor' },
+    })
+    await prisma.inboundSms.create({ data: { fromPhone: fence.phone, body: 'Hi, can we move the visit to Friday morning?', missionId: open.id } })
+    console.log('Données de démo créées : 2 agents (1 actif, 1 bloqué au quiz), 3 pros, 2 missions (1 à valider), 1 SMS reçu.')
+  }
+
+  console.log(`\nAdmin : ${adminEmail} (ADMIN)`)
+  console.log('Connexion sans Google : ouvrir http://localhost:3000, coller UNE ligne dans la console du navigateur, recharger.')
+  console.log('(une seule session à la fois : la seconde ligne remplace la première)\n')
+  console.log('Session admin :')
+  console.log(await cookieLine({ kind: 'admin', email: adminEmail, name: 'Admin (dev)', sub: adminEmail }))
+  console.log('\nSession agent (Maya) :')
+  console.log(await cookieLine({ kind: 'agent', agentId: maya.id, name: maya.firstName, sub: maya.id }))
+  await prisma.$disconnect()
+}
+
+main()
+```
+
+- [ ] **Step 4: Ajouter le script npm**
+
+Dans `package.json`, section `scripts`, insérer juste avant la ligne `"admin:add": …` :
+
+```json
+    "seed:dev": "tsx scripts/seed-dev.ts",
+```
+
+- [ ] **Step 5: Vérifier**
+
+Run: `npm run seed:dev`
+Expected: « Données de démo créées : 2 agents (1 actif, 1 bloqué au quiz), 3 pros, 2 missions (1 à valider), 1 SMS reçu. », l'admin, puis deux lignes `document.cookie = "authjs.session-token=…; path=/; max-age=604800"`. Relancé : « Données de démo déjà présentes : rien de créé. » et les deux lignes.
+
+Run: `NODE_ENV=production npm run seed:dev; echo "exit=$?"`
+Expected: « seed-dev refusé : NODE_ENV=production » puis `exit=1`.
+
+Avec `npm run dev` lancé, dans une fenêtre privée sur `http://localhost:3000`, coller la ligne « Session admin » dans la console, ouvrir `/admin` : le tableau de bord s'affiche sans passer par Google, avec les tuiles « Visites à valider » 1, « Non prises » 1, « SMS non traités » 1, « Agents bloqués » 1.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add scripts/seed-guard.ts scripts/seed-guard.test.ts scripts/seed-dev.ts package.json
+git commit -m "chore(dev): demo data seed with dev session cookies"
+```
+
+### Task 69: Liste des pros et fiche pro
+
+**Files:**
+- Create: `app/admin/(app)/pros/page.tsx`, `app/admin/(app)/pros/[id]/page.tsx`
+
+- [ ] **Step 1: Écrire la liste (`app/admin/(app)/pros/page.tsx`)**
+
+```tsx
+import Form from 'next/form'
+import Link from 'next/link'
+import { Badge, Empty, PageHeader, Table, buttonLinkClass, inputClass, linkClass, tdClass } from '@/app/admin/_components/ui'
+import { formatParis } from '@/app/admin/_lib/format'
+import { pickEnum } from '@/app/admin/_lib/forms'
+import { PRO_STATUSES, PRO_STATUS_LABELS } from '@/app/admin/_lib/labels'
+import { requireAdmin } from '@/lib/session'
+import { listPros } from '@/modules/missions'
+
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> }
+
+export default async function ProsPage({ searchParams }: Props) {
+  await requireAdmin()
+  const sp = await searchParams
+  const status = pickEnum(sp.status, PRO_STATUSES)
+  const q = typeof sp.q === 'string' ? sp.q : ''
+  const pros = await listPros({ status, q })
+  return (
+    <>
+      <PageHeader title="Pros">
+        <Link href="/admin/pros/import" className={buttonLinkClass}>Importer un CSV</Link>
+        <Link href="/admin/pros/new" className={buttonLinkClass}>Nouveau pro</Link>
+      </PageHeader>
+      <Form action="/admin/pros" className="mb-4 flex flex-wrap items-center gap-2">
+        <input name="q" defaultValue={q} placeholder="Nom, ville ou téléphone" aria-label="Recherche" className={`${inputClass} max-w-xs`} />
+        <select name="status" defaultValue={status ?? ''} aria-label="Statut" className={`${inputClass} max-w-xs`}>
+          <option value="">Tous les statuts</option>
+          {PRO_STATUSES.map((s) => <option key={s} value={s}>{PRO_STATUS_LABELS[s]}</option>)}
+        </select>
+        <button type="submit" className={buttonLinkClass}>Filtrer</button>
+      </Form>
+      {pros.length === 0 ? (
+        <Empty>Aucun pro pour ces filtres.</Empty>
+      ) : (
+        <Table head={['Entreprise', 'Ville', 'Métier', 'Téléphone', 'Statut', 'Modifié le']}>
+          {pros.map((p) => (
+            <tr key={p.id}>
+              <td className={tdClass}><Link href={`/admin/pros/${p.id}`} className={linkClass}>{p.businessName}</Link></td>
+              <td className={tdClass}>
+                {p.city}, {p.state}
+                {p.lat == null && <span className="ml-2 text-xs text-red-700">sans coordonnées</span>}
+              </td>
+              <td className={tdClass}>{p.trade}</td>
+              <td className={tdClass}>{p.phone}</td>
+              <td className={tdClass}><Badge>{PRO_STATUS_LABELS[p.status]}</Badge></td>
+              <td className={tdClass}>{formatParis(p.updatedAt)}</td>
+            </tr>
+          ))}
+        </Table>
+      )}
+      {pros.length === 200 && <p className="mt-2 text-sm text-gray-500">200 premiers résultats : affinez la recherche.</p>}
+    </>
+  )
+}
+```
+
+- [ ] **Step 2: Écrire la fiche (`app/admin/(app)/pros/[id]/page.tsx`)**
+
+Le journal réunit les actions sur le pro et sur chacune de ses missions.
+
+```tsx
+import Link from 'next/link'
+import { notFound } from 'next/navigation'
+import { ActionForm, SubmitButton } from '@/app/admin/_components/action-form'
+import { AuditList } from '@/app/admin/_components/audit-list'
+import { Badge, Banner, Card, Empty, PageHeader, Table, buttonLinkClass, inputClass, linkClass, tdClass } from '@/app/admin/_components/ui'
+import { isCancellable, isReviewable, mapsUrl, missionHref } from '@/app/admin/_lib/format'
+import { MISSION_STATUS_LABELS, MISSION_TYPE_LABELS, PRO_STATUS_LABELS } from '@/app/admin/_lib/labels'
+import { requireAdmin } from '@/lib/session'
+import { formatSlot } from '@/lib/time'
+import { listAudit } from '@/modules/audit'
+import { getPro } from '@/modules/missions'
+import { CancelMissionForm } from '../../missions/cancel-form'
+import { setProStatusAction } from '../actions'
+import { MissionForm } from './mission-form'
+
+const NOTICES: Record<string, string> = {
+  created: 'Pro créé.',
+  updated: 'Pro mis à jour.',
+  mission: 'Mission publiée : les agents du secteur la voient dès maintenant.',
+}
+
+type Props = { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }
+
+export default async function ProPage({ params, searchParams }: Props) {
+  await requireAdmin()
+  const { id } = await params
+  const { notice } = await searchParams
+  const pro = await getPro(id)
+  if (!pro) notFound()
+  const audits = await Promise.all([listAudit('Pro', pro.id), ...pro.missions.map((m) => listAudit('Mission', m.id))])
+  const journal = audits.flat().sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+  const noticeText = typeof notice === 'string' ? NOTICES[notice] : undefined
+  const editHref = `/admin/pros/${pro.id}/edit`
+  const statusFields = (to: string) => <><input type="hidden" name="proId" value={pro.id} /><input type="hidden" name="to" value={to} /></>
+
+  return (
+    <>
+      <PageHeader title={pro.businessName} back={{ href: '/admin/pros', label: 'Pros' }}>
+        <Link href={editHref} className={buttonLinkClass}>Modifier</Link>
+      </PageHeader>
+      {noticeText && <Banner tone="success">{noticeText}</Banner>}
+      {pro.lat == null && (
+        <Banner tone="warning">
+          Adresse introuvable : aucune mission possible. <Link href={editHref} className="underline">Saisir la latitude et la longitude</Link>.
+        </Banner>
+      )}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <Card title="Coordonnées">
+            <dl className="grid grid-cols-[9rem_1fr] gap-x-4 gap-y-2 text-sm">
+              <dt className="text-gray-500">Contact</dt><dd>{pro.contactName ?? '—'}</dd>
+              <dt className="text-gray-500">Téléphone</dt><dd><a href={`tel:${pro.phone}`} className={linkClass}>{pro.phone}</a></dd>
+              <dt className="text-gray-500">Adresse</dt><dd>{pro.address}, {pro.city}, {pro.state} {pro.zip}</dd>
+              <dt className="text-gray-500">Métier</dt><dd>{pro.trade}</dd>
+              <dt className="text-gray-500">Fuseau</dt><dd>{pro.timeZone}</dd>
+              <dt className="text-gray-500">Position</dt>
+              <dd>{pro.lat != null && pro.lng != null ? <a href={mapsUrl(pro.lat, pro.lng)} target="_blank" rel="noreferrer" className={linkClass}>{pro.lat}, {pro.lng}</a> : '—'}</dd>
+              <dt className="text-gray-500">Fiche existante</dt>
+              <dd>
+                {pro.existingPlaceId ? (
+                  <a href={`https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(pro.existingPlaceId)}`} target="_blank" rel="noreferrer" className={linkClass}>
+                    {pro.existingPlaceId} (à revendiquer)
+                  </a>
+                ) : 'Aucune : la visite en crée une'}
+              </dd>
+              <dt className="text-gray-500">Notes d’appel</dt><dd className="whitespace-pre-line">{pro.notes ?? '—'}</dd>
+            </dl>
+          </Card>
+
+          <Card title="Missions">
+            {pro.missions.length === 0 ? (
+              <Empty>Aucune mission.</Empty>
+            ) : (
+              <Table head={['Créneau (heure du pro)', 'Type', 'Statut', 'Agent', '']}>
+                {pro.missions.map((m) => (
+                  <tr key={m.id} id={`mission-${m.id}`}>
+                    <td className={tdClass}>{formatSlot(m.slotAt, pro.timeZone)}</td>
+                    <td className={tdClass}>{MISSION_TYPE_LABELS[m.type]}</td>
+                    <td className={tdClass}>
+                      <Badge>{MISSION_STATUS_LABELS[m.status]}</Badge>
+                      {(m.cancelReason ?? m.rejectReason) && <p className="mt-1 text-xs text-gray-500">{m.cancelReason ?? m.rejectReason}</p>}
+                    </td>
+                    <td className={tdClass}>
+                      {m.agent ? <Link href={`/admin/agents/${m.agent.id}`} className={linkClass}>{m.agent.firstName} {m.agent.lastName}</Link> : '—'}
+                    </td>
+                    <td className={tdClass}>
+                      {isReviewable(m.status) && <Link href={missionHref(m)} className={linkClass}>Voir la visite</Link>}
+                      {isCancellable(m.status) && <CancelMissionForm missionId={m.id} />}
+                    </td>
+                  </tr>
+                ))}
+              </Table>
+            )}
+          </Card>
+
+          {pro.status === 'AGREED' && (
+            <Card title="Nouvelle mission">
+              {pro.lat == null ? (
+                <Empty>Saisissez d’abord les coordonnées du pro.</Empty>
+              ) : (
+                <MissionForm proId={pro.id} timeZone={pro.timeZone} defaultCategory={pro.trade} />
+              )}
+            </Card>
+          )}
+        </div>
+
+        <div className="space-y-6">
+          <Card title="Statut">
+            <Badge>{PRO_STATUS_LABELS[pro.status]}</Badge>
+            {pro.status === 'LOST' && pro.lostReason && <p className="mt-2 text-sm text-gray-700">Motif : {pro.lostReason}</p>}
+            <div className="mt-4 space-y-4">
+              {pro.status === 'TO_CALL' && (
+                <ActionForm action={setProStatusAction}>
+                  {statusFields('AGREED')}
+                  <SubmitButton>Le pro est d’accord</SubmitButton>
+                </ActionForm>
+              )}
+              {pro.status === 'AGREED' && (
+                <ActionForm action={setProStatusAction}>
+                  {statusFields('TO_CALL')}
+                  <SubmitButton tone="secondary">Repasser « à appeler »</SubmitButton>
+                </ActionForm>
+              )}
+              {pro.status !== 'LOST' && (
+                <ActionForm action={setProStatusAction} className="space-y-2">
+                  {statusFields('LOST')}
+                  <input name="reason" required placeholder="Motif (ex. ne répond plus)" aria-label="Motif" className={inputClass} />
+                  <p className="text-xs text-gray-500">Annule aussi ses missions en cours.</p>
+                  <SubmitButton tone="danger">Marquer perdu</SubmitButton>
+                </ActionForm>
+              )}
+            </div>
+          </Card>
+          <Card title="Journal">
+            <AuditList entries={journal} />
+          </Card>
+        </div>
+      </div>
+    </>
+  )
+}
+```
+
+- [ ] **Step 3: Vérifier le typage et le lint**
+
+Run: `npx tsc --noEmit && npm run lint`
+Expected: aucune erreur.
+
+- [ ] **Step 4: Vérification manuelle**
+
+Run: `npm run dev`, connecté en admin, jeu de démo chargé :
+- `/admin/pros` : 3 pros ; « Jamaica » dans la recherche n'en garde qu'un ; le filtre « D’accord » ne garde que « Jamaica Plain Roofing & Gutters » ; l'URL porte `?q=…&status=…`.
+- Fiche « Delgado Concrete… » : coordonnées, lien de position vers Google Maps, notes sur deux lignes ; mission « Soumise » avec un créneau d'hier à l'heure de Boston et un lien « Voir la visite » (page écrite au Task 74).
+- Fiche « Jamaica Plain Roofing & Gutters » (« D’accord ») : bloc « Nouvelle mission » ; créneau d'hier → « Le créneau doit être dans le futur » et la saisie reste affichée ; créneau dans 3 jours à 10:00 → bandeau vert « Mission publiée… », la mission apparaît avec « 10:00 AM », le pro passe « Mission ouverte ».
+- Sur cette mission, « Annuler la mission » sans motif → le navigateur bloque l'envoi ; avec le motif `Test` → « Annulée » avec le motif, le pro repasse « D’accord », le journal montre « Mission annulée », le motif et votre email.
+- « Repasser « à appeler » » puis « Le pro est d’accord » → le statut suit ; le journal montre « Statut du pro changé → À appeler » puis « → D’accord ».
+- « Marquer perdu » avec le motif `Test` → statut « Perdu », motif affiché, plus aucun bouton de statut ni bloc « Nouvelle mission ».
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add "app/admin/(app)/pros"
+git commit -m "feat(admin): pros list and pro page with missions, status and journal"
+```
+
+### Task 65: Création et modification d'un pro
+
+**Files:**
+- Create: `app/admin/(app)/pros/pro-form.tsx`, `app/admin/(app)/pros/new/page.tsx`, `app/admin/(app)/pros/[id]/edit/page.tsx`
+
+- [ ] **Step 1: Écrire le formulaire (`app/admin/(app)/pros/pro-form.tsx`)**
+
+Le fuseau proposé suit l'État tapé ; après une erreur, la saisie revient du serveur (`state.values`) et sert de valeur par défaut, car React vide le formulaire après chaque envoi.
+
+```tsx
+'use client'
+
+import { useActionState, useState } from 'react'
+import { SubmitButton, type FormAction } from '@/app/admin/_components/action-form'
+import { Field, inputClass } from '@/app/admin/_components/ui'
+import { US_TIME_ZONES, defaultTimeZoneForState } from '@/lib/time'
+
+export function ProForm({ action, initial, submitLabel }: { action: FormAction; initial: Record<string, string>; submitLabel: string }) {
+  const [state, formAction] = useActionState(action, {})
+  const values: Record<string, string | undefined> = { ...initial, ...state.values }
+  const errors = state.fieldErrors ?? {}
+  const [stateCode, setStateCode] = useState(values.state ?? '')
+  const proposedZone = defaultTimeZoneForState(stateCode)
+
+  const text = (name: string, label: string, opts: { required?: boolean; placeholder?: string; help?: string } = {}) => (
+    <Field label={label} help={opts.help} error={errors[name]}>
+      <input name={name} required={opts.required} placeholder={opts.placeholder} defaultValue={values[name]} className={inputClass} />
+    </Field>
+  )
+
+  return (
+    <form action={formAction} className="max-w-3xl space-y-5">
+      {initial.proId && <input type="hidden" name="proId" value={initial.proId} />}
+      {state.error && <p role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-800">{state.error}</p>}
+      <div className="grid gap-4 sm:grid-cols-2">
+        {text('businessName', 'Entreprise', { required: true, placeholder: 'Delgado Concrete & Masonry LLC' })}
+        {text('contactName', 'Contact', { placeholder: 'Frank Delgado' })}
+        {text('phone', 'Téléphone (US)', { required: true, placeholder: '(617) 555-0142' })}
+        {text('trade', 'Métier', { required: true, placeholder: 'Concrete contractor', help: 'En anglais ; proposé comme catégorie Google des missions.' })}
+      </div>
+      <div className="grid gap-4 sm:grid-cols-[2fr_1fr_5rem_7rem]">
+        {text('address', 'Adresse', { required: true, placeholder: '120 Tremont Street' })}
+        {text('city', 'Ville', { required: true, placeholder: 'Boston' })}
+        <Field label="État" error={errors.state}>
+          <input name="state" required maxLength={2} placeholder="MA" defaultValue={values.state} onChange={(e) => setStateCode(e.target.value)} className={`${inputClass} uppercase`} />
+        </Field>
+        {text('zip', 'ZIP', { required: true, placeholder: '02108' })}
+      </div>
+      <Field label="Fuseau horaire" error={errors.timeZone} help="Les créneaux des missions se saisissent à l’heure de ce fuseau.">
+        <select name="timeZone" defaultValue={values.timeZone ?? ''} className={inputClass}>
+          <option value="">{proposedZone ? `Selon l’État (${proposedZone})` : 'Selon l’État'}</option>
+          {US_TIME_ZONES.map((z) => <option key={z} value={z}>{z}</option>)}
+        </select>
+      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {text('lat', 'Latitude', { placeholder: '42.3564', help: 'Seulement si l’adresse est introuvable. Videz les deux champs pour regéocoder une adresse modifiée.' })}
+        {text('lng', 'Longitude', { placeholder: '-71.0621' })}
+      </div>
+      {text('existingPlaceId', 'Place ID d’une fiche existante', { placeholder: 'ChIJ…', help: 'Si le pro a déjà une fiche publique sur Maps : la mission demandera de la revendiquer.' })}
+      <Field label="Notes d’appel" error={errors.notes}>
+        <textarea name="notes" rows={4} maxLength={2000} defaultValue={values.notes} className={inputClass} />
+      </Field>
+      <SubmitButton>{submitLabel}</SubmitButton>
+    </form>
+  )
+}
+```
+
+- [ ] **Step 2: Écrire les pages de création et de modification**
+
+`app/admin/(app)/pros/new/page.tsx` :
+
+```tsx
+import { PageHeader } from '@/app/admin/_components/ui'
+import { requireAdmin } from '@/lib/session'
+import { createProAction } from '../actions'
+import { ProForm } from '../pro-form'
+
+export default async function NewProPage() {
+  await requireAdmin()
+  return (
+    <>
+      <PageHeader title="Nouveau pro" back={{ href: '/admin/pros', label: 'Pros' }} />
+      <ProForm action={createProAction} initial={{}} submitLabel="Créer le pro" />
+    </>
+  )
+}
+```
+
+`app/admin/(app)/pros/[id]/edit/page.tsx` :
+
+```tsx
+import { notFound } from 'next/navigation'
+import { PageHeader } from '@/app/admin/_components/ui'
+import { requireAdmin } from '@/lib/session'
+import { getPro } from '@/modules/missions'
+import { updateProAction } from '../../actions'
+import { ProForm } from '../../pro-form'
+
+export default async function EditProPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireAdmin()
+  const pro = await getPro((await params).id)
+  if (!pro) notFound()
+  const initial = {
+    proId: pro.id, businessName: pro.businessName, contactName: pro.contactName ?? '', phone: pro.phone,
+    address: pro.address, city: pro.city, state: pro.state, zip: pro.zip, trade: pro.trade, timeZone: pro.timeZone,
+    lat: pro.lat?.toString() ?? '', lng: pro.lng?.toString() ?? '', existingPlaceId: pro.existingPlaceId ?? '', notes: pro.notes ?? '',
+  }
+  return (
+    <>
+      <PageHeader title={`Modifier ${pro.businessName}`} back={{ href: `/admin/pros/${pro.id}`, label: pro.businessName }} />
+      <ProForm action={updateProAction} initial={initial} submitLabel="Enregistrer" />
+    </>
+  )
+}
+```
+
+- [ ] **Step 3: Vérifier le typage et le lint**
+
+Run: `npx tsc --noEmit && npm run lint`
+Expected: aucune erreur.
+
+- [ ] **Step 4: Vérification manuelle**
+
+Run: `npm run dev`, connecté en admin :
+- `/admin/pros/new`, taper `tx` dans « État » → l'option vide devient « Selon l’État (America/Chicago) ».
+- Envoyer avec le téléphone `123` et le ZIP `abc` → « Téléphone US invalide » et « Code postal à 5 chiffres » sous les champs, le reste de la saisie est conservé.
+- Créer « Lone Star Fence Co », `(512) 555-0188`, `1100 Congress Ave`, `Austin`, `TX`, `78701`, `Fence contractor` → fiche du pro, bandeau « Pro créé. », fuseau `America/Chicago`, statut « À appeler », position renseignée (géocodeur du Census).
+- Créer « Nowhere Masonry », `(617) 555-0160`, `1 Nowhere Road`, `Boston`, `MA`, `02108`, `Masonry contractor` → bandeau ambré « Adresse introuvable… » ; « Modifier », saisir `42.3564` et `-71.0621`, « Enregistrer » → bandeau « Pro mis à jour. », plus d'avertissement, le journal montre « Pro modifié ».
+- Sur « Modifier », remplacer « Entreprise » par `A` → « Nom trop court » sous le champ, les autres champs gardent leur valeur.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add "app/admin/(app)/pros"
+git commit -m "feat(admin): create and edit pros"
+```
+
+### Task 66: Import CSV des pros
+
+**Files:**
+- Create: `app/admin/(app)/pros/import/page.tsx`, `app/admin/(app)/pros/import/import-form.tsx`
+
+- [ ] **Step 1: Écrire le formulaire (`app/admin/(app)/pros/import/import-form.tsx`)**
+
+```tsx
+'use client'
+
+import { useActionState } from 'react'
+import { SubmitButton } from '@/app/admin/_components/action-form'
+import { Field, Table, inputClass, tdClass } from '@/app/admin/_components/ui'
+import { importProsAction } from '../actions'
+import type { ImportState } from '../csv-input'
+
+const EXAMPLE = 'business_name,contact_name,phone,address,city,state,zip,trade\nDelgado Concrete,Frank Delgado,(617) 555-0142,120 Tremont St,Boston,MA,02108,Concrete contractor'
+
+export function ImportForm() {
+  const [state, formAction] = useActionState(importProsAction, {} as ImportState)
+  const r = state.result
+  return (
+    <div className="space-y-6">
+      <form action={formAction} className="max-w-3xl space-y-4">
+        <Field label="Fichier CSV">
+          <input type="file" name="file" accept=".csv,text/csv" className="text-sm" />
+        </Field>
+        <Field label="… ou contenu collé" help="Première ligne : les noms de colonnes.">
+          <textarea name="csv" rows={8} placeholder={EXAMPLE} className={`${inputClass} font-mono`} />
+        </Field>
+        {state.error && <p role="alert" className="text-sm text-red-700">{state.error}</p>}
+        <SubmitButton>Importer</SubmitButton>
+      </form>
+      {r && (
+        <section className="max-w-3xl space-y-3 text-sm">
+          <p>
+            <strong>{r.created}</strong> pro(s) créé(s)
+            {r.withoutCoords > 0 && <>, dont <strong>{r.withoutCoords}</strong> sans coordonnées (adresse introuvable : à compléter depuis leur fiche)</>}.
+          </p>
+          {r.errors.length > 0 && (
+            <Table head={['Ligne', 'Problème']}>
+              {r.errors.map((e, i) => <tr key={i}><td className={tdClass}>{e.line}</td><td className={tdClass}>{e.message}</td></tr>)}
+            </Table>
+          )}
+        </section>
+      )}
+    </div>
+  )
+}
+```
+
+- [ ] **Step 2: Écrire la page (`app/admin/(app)/pros/import/page.tsx`)**
+
+```tsx
+import { PageHeader } from '@/app/admin/_components/ui'
+import { requireAdmin } from '@/lib/session'
+import { MAX_IMPORT_ROWS } from '@/modules/missions'
+import { ImportForm } from './import-form'
+
+export default async function ImportProsPage() {
+  await requireAdmin()
+  return (
+    <>
+      <PageHeader title="Importer des pros" back={{ href: '/admin/pros', label: 'Pros' }} />
+      <div className="mb-6 max-w-3xl space-y-2 text-sm text-gray-700">
+        <p>
+          Colonnes : <code>business_name</code>, <code>contact_name</code> (facultatif), <code>phone</code>, <code>address</code>, <code>city</code>,{' '}
+          <code>state</code>, <code>zip</code>, <code>trade</code>. Les en-têtes d’un export Sheets ou Excel (« Business Name ») sont acceptés.
+        </p>
+        <p>
+          Chaque ligne devient un pro « à appeler », géocodé depuis son adresse (environ 1 s par ligne). Les téléphones déjà connus sont ignorés.{' '}
+          {MAX_IMPORT_ROWS} lignes au plus par import.
+        </p>
+      </div>
+      <ImportForm />
+    </>
+  )
+}
+```
+
+- [ ] **Step 3: Vérifier le typage et le lint**
+
+Run: `npx tsc --noEmit && npm run lint`
+Expected: aucune erreur.
+
+- [ ] **Step 4: Vérification manuelle**
+
+Créer `/tmp/pros-test.csv` :
+
+```
+Business Name,Contact Name,Phone,Address,City,State,ZIP,Trade
+"Harbor Concrete, LLC",Ana Lopez,(617) 555-0150,1 City Hall Square,Boston,MA,2201,Concrete contractor
+Delgado Again,,617-555-0142,120 Tremont Street,Boston,MA,02108,Concrete contractor
+Bad Phone Co,,123,10 Main St,Boston,MA,02108,Fence contractor
+Nowhere Fence,,617-555-0151,1 Nowhere Road,Boston,MA,02108,Fence contractor
+```
+
+Run: `npm run dev`, `/admin/pros/import` :
+- « Importer » sans fichier ni texte → « Collez le contenu du CSV ou choisissez un fichier. ».
+- Choisir `/tmp/pros-test.csv` → « 2 pro(s) créé(s), dont 1 sans coordonnées… » et le tableau : ligne 3 « Déjà présent (même téléphone) », ligne 4 « Téléphone US invalide ».
+- `/admin/pros` : « Harbor Concrete, LLC » (ZIP `02201`, virgule du nom conservée) et « Nowhere Fence » marqué « sans coordonnées ».
+- Coller dans le texte `name,phone` puis `A,6175550199` → ligne 1 « Colonnes manquantes : business_name, address, city, state, zip, trade ».
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add "app/admin/(app)/pros/import"
+git commit -m "feat(admin): CSV import of pros with per-line errors"
+```
+
+### Task 67: Missions (encarts, liste, lien stable)
+
+**Files:**
+- Create: `app/admin/(app)/missions/page.tsx`, `app/admin/(app)/missions/[id]/page.tsx`
+
+- [ ] **Step 1: Écrire la page (`app/admin/(app)/missions/page.tsx`)**
+
+Les trois encarts de `adminBoards` (spec §5.2), puis toutes les missions filtrées par statut. Le bouton « Élargir » propose le rayon des réglages (`widenRadiusMiles`).
+
+```tsx
+import Link from 'next/link'
+import { ActionForm, SubmitButton } from '@/app/admin/_components/action-form'
+import { Badge, Card, Empty, FilterLinks, PageHeader, Table, inputClass, linkClass, tdClass } from '@/app/admin/_components/ui'
+import { centsToDollarsInput, formatParis, formatUsd, missionHref } from '@/app/admin/_lib/format'
+import { pickEnum } from '@/app/admin/_lib/forms'
+import { MISSION_STATUSES, MISSION_STATUS_LABELS, MISSION_TYPE_LABELS } from '@/app/admin/_lib/labels'
+import { requireAdmin } from '@/lib/session'
+import { formatSlot } from '@/lib/time'
+import { adminBoards, listMissions } from '@/modules/missions'
+import { getSettings } from '@/modules/settings'
+import { rescheduleMissionAction, urgencyBonusAction, widenMissionAction } from './actions'
+import { CancelMissionForm } from './cancel-form'
+
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> }
+
+export default async function MissionsPage({ searchParams }: Props) {
+  await requireAdmin()
+  const status = pickEnum((await searchParams).status, MISSION_STATUSES)
+  const [boards, missions, settings] = await Promise.all([adminBoards(), listMissions({ status }), getSettings()])
+  const widen = settings.widenRadiusMiles
+
+  return (
+    <>
+      <PageHeader title="Missions" />
+      <div className="space-y-6">
+        <Card id="non-prises" title={`Non prises depuis plus de 48 h (${boards.untaken.length})`}>
+          {boards.untaken.length === 0 ? <Empty>Aucune.</Empty> : (
+            <ul className="divide-y divide-gray-100">
+              {boards.untaken.map((m) => (
+                <li key={m.id} className="flex flex-wrap items-start justify-between gap-4 py-3 text-sm">
+                  <div>
+                    <Link href={`/admin/pros/${m.proId}`} className={linkClass}>{m.pro.businessName}</Link> · {m.pro.city}, {m.pro.state}
+                    <p className="text-gray-600">Créneau {formatSlot(m.slotAt, m.pro.timeZone)} (heure du pro) · publiée le {formatParis(m.publishedAt)}</p>
+                    <p className="text-gray-600">
+                      Diffusion : {m.broadcastRadiusMiles ? `${m.broadcastRadiusMiles} miles` : 'rayon de chaque agent'} · bonus urgence {formatUsd(m.urgencyBonusCents)}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    {(m.broadcastRadiusMiles ?? 0) < widen ? (
+                      <ActionForm action={widenMissionAction}>
+                        <input type="hidden" name="missionId" value={m.id} />
+                        <input type="hidden" name="miles" value={widen} />
+                        <SubmitButton tone="secondary">Élargir à {widen} miles</SubmitButton>
+                      </ActionForm>
+                    ) : (
+                      <p className="text-gray-500">Déjà élargie à {m.broadcastRadiusMiles} miles</p>
+                    )}
+                    <ActionForm action={urgencyBonusAction}>
+                      <input type="hidden" name="missionId" value={m.id} />
+                      <input name="dollars" type="number" min="0" max="100" step="0.01" required placeholder="15" aria-label="Bonus urgence en dollars"
+                        defaultValue={m.urgencyBonusCents ? centsToDollarsInput(m.urgencyBonusCents) : ''} className={`${inputClass} w-24`} />
+                      <SubmitButton tone="secondary">Bonus urgence ($)</SubmitButton>
+                    </ActionForm>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+        <Card id="a-replanifier" title={`À replanifier : créneau passé sans preneur (${boards.toReschedule.length})`}>
+          {boards.toReschedule.length === 0 ? <Empty>Aucune.</Empty> : (
+            <ul className="divide-y divide-gray-100">
+              {boards.toReschedule.map((m) => (
+                <li key={m.id} className="flex flex-wrap items-start justify-between gap-4 py-3 text-sm">
+                  <div>
+                    <Link href={`/admin/pros/${m.proId}`} className={linkClass}>{m.pro.businessName}</Link> · {m.pro.city}, {m.pro.state}
+                    <p className="text-gray-600">Créneau passé : {formatSlot(m.slotAt, m.pro.timeZone)} (heure du pro)</p>
+                  </div>
+                  <div className="space-y-2">
+                    <ActionForm action={rescheduleMissionAction}>
+                      <input type="hidden" name="missionId" value={m.id} />
+                      <input type="datetime-local" name="slotLocal" required aria-label={`Nouveau créneau, heure du pro (${m.pro.timeZone})`} className={`${inputClass} w-56`} />
+                      <SubmitButton>Replanifier</SubmitButton>
+                    </ActionForm>
+                    <p className="text-xs text-gray-500">À l’heure du pro ({m.pro.timeZone}) ; la mission est republiée.</p>
+                    <CancelMissionForm missionId={m.id} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+        <Card id="sans-nouvelles" title={`Visites sans nouvelles : pas de check-in 2 h après le créneau (${boards.silent.length})`}>
+          <p className="mb-2 text-xs text-gray-500">L’agent reçoit un SMS de relance à +2 h ; la mission est remise en ligne à +24 h.</p>
+          {boards.silent.length === 0 ? <Empty>Aucune.</Empty> : (
+            <ul className="divide-y divide-gray-100">
+              {boards.silent.map((m) => (
+                <li key={m.id} className="py-3 text-sm">
+                  <Link href={`/admin/pros/${m.proId}`} className={linkClass}>{m.pro.businessName}</Link> · {m.pro.phone} · créneau {formatSlot(m.slotAt, m.pro.timeZone)}
+                  <p className="text-gray-600">
+                    Agent : {m.agent ? <><Link href={`/admin/agents/${m.agent.id}`} className={linkClass}>{m.agent.firstName} {m.agent.lastName}</Link> · {m.agent.phone}</> : '—'}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+        <Card id="liste" title="Toutes les missions">
+          <FilterLinks base="/admin/missions" hash="#liste" current={status} options={MISSION_STATUSES} labels={MISSION_STATUS_LABELS} />
+          {missions.length === 0 ? <Empty>Aucune mission.</Empty> : (
+            <Table head={['Créneau (heure du pro)', 'Pro', 'Type', 'Statut', 'Agent']}>
+              {missions.map((m) => (
+                <tr key={m.id}>
+                  <td className={tdClass}><Link href={missionHref(m)} className={linkClass}>{formatSlot(m.slotAt, m.pro.timeZone)}</Link></td>
+                  <td className={tdClass}>{m.pro.businessName}<p className="text-xs text-gray-500">{m.pro.city}, {m.pro.state}</p></td>
+                  <td className={tdClass}>{MISSION_TYPE_LABELS[m.type]}</td>
+                  <td className={tdClass}><Badge>{MISSION_STATUS_LABELS[m.status]}</Badge></td>
+                  <td className={tdClass}>
+                    {m.agent ? <Link href={`/admin/agents/${m.agent.id}`} className={linkClass}>{m.agent.firstName} {m.agent.lastName}</Link> : '—'}
+                  </td>
+                </tr>
+              ))}
+            </Table>
+          )}
+        </Card>
+      </div>
+    </>
+  )
+}
+```
+
+- [ ] **Step 2: Écrire le lien stable (`app/admin/(app)/missions/[id]/page.tsx`)**
+
+Les SMS reçus et les alertes d'un agent ne connaissent que l'identifiant de la mission : cette page redirige vers l'endroit qui la montre.
+
+```tsx
+import { notFound, redirect } from 'next/navigation'
+import { missionHref } from '@/app/admin/_lib/format'
+import { requireAdmin } from '@/lib/session'
+import { getReviewDetail } from '@/modules/review'
+
+export default async function MissionLinkPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireAdmin()
+  const mission = await getReviewDetail((await params).id)
+  if (!mission) notFound()
+  redirect(missionHref(mission))
+}
+```
+
+- [ ] **Step 3: Vérifier le typage et le lint**
+
+Run: `npx tsc --noEmit && npm run lint`
+Expected: aucune erreur.
+
+- [ ] **Step 4: Vérification manuelle**
+
+Run: `npm run dev`, connecté en admin, avec le jeu de démo :
+- « Non prises » : la mission « Back Bay Fence & Gate Co. » ; « Élargir à 50 miles » → « Rayon de diffusion élargi à 50 miles. », puis la ligne affiche « Déjà élargie à 50 miles ». Bonus `15` → « Bonus urgence : 15,00 $. » ; `150` → bloqué par le navigateur (max 100).
+- Passer la mission dans le passé : `psql agents_terrain -c "UPDATE \"Mission\" SET \"slotAt\" = now() - interval '2 hours' WHERE status = 'OPEN'"`, recharger → elle quitte « Non prises » et apparaît dans « À replanifier ». Un créneau passé → « Le créneau doit être dans le futur » ; un créneau dans 2 jours → « Mission replanifiée et republiée. », elle quitte l'encart (publiée à l'instant).
+- « Visites sans nouvelles » : `psql agents_terrain -c "UPDATE \"Mission\" SET status = 'ACCEPTED', \"agentId\" = (SELECT id FROM \"Agent\" WHERE email = 'maya.demo@example.com'), \"slotAt\" = now() - interval '3 hours' WHERE status = 'OPEN'"` → la mission y apparaît avec Maya, son téléphone et celui du pro.
+- « Toutes les missions » : le filtre « Soumise » ne garde que la visite Delgado ; son créneau mène à `/admin/review/<id>` ; celui de la mission « Back Bay » (acceptée) mène à la fiche du pro, sur sa ligne.
+- `/admin/missions/<id de la mission Back Bay>` redirige vers la fiche du pro (`#mission-<id>`) ; `/admin/missions/inconnu` → 404.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add "app/admin/(app)/missions"
+git commit -m "feat(admin): missions boards (untaken, reschedule, silent) and list"
+```
+
+### Task 68: SMS reçus
+
+SMS reçus, validation et agents sont réservés au rôle ADMIN (spec §5 : les SETTER gèrent pros et missions) : `requireAdmin(['ADMIN'])` partout dans ces sections ; un SETTER qui ouvre ces pages est renvoyé vers la connexion admin avec `?error=forbidden`.
+
+**Files:**
+- Create: `app/admin/(app)/sms/actions.ts`, `app/admin/(app)/sms/page.tsx`
+
+- [ ] **Step 1: Écrire l'action et la page**
+
+`app/admin/(app)/sms/actions.ts` :
+
+```ts
+'use server'
+
+import { formText, type ActionState } from '@/app/admin/_lib/forms'
+import { runAction } from '@/app/admin/_lib/run-action'
+import { requireAdmin } from '@/lib/session'
+import { markInboundHandled } from '@/modules/review'
+
+export async function markHandledAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const admin = await requireAdmin(['ADMIN'])
+  return runAction(() => markInboundHandled(formText(fd, 'smsId'), admin.email), 'Marqué traité.')
+}
+```
+
+`app/admin/(app)/sms/page.tsx` :
+
+```tsx
+import Link from 'next/link'
+import { ActionForm, SubmitButton } from '@/app/admin/_components/action-form'
+import { Badge, Empty, PageHeader, Table, linkClass, tdClass } from '@/app/admin/_components/ui'
+import { formatParis } from '@/app/admin/_lib/format'
+import { requireAdmin } from '@/lib/session'
+import { listInbound } from '@/modules/review'
+import { markHandledAction } from './actions'
+
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> }
+
+const tab = (active: boolean) => (active ? 'rounded-full bg-gray-900 px-3 py-1 text-white' : 'rounded-full bg-white px-3 py-1 text-gray-700 ring-1 ring-gray-300')
+
+export default async function InboundSmsPage({ searchParams }: Props) {
+  await requireAdmin(['ADMIN'])
+  const all = (await searchParams).all === '1'
+  const messages = await listInbound(all ? {} : { handled: false })
+  return (
+    <>
+      <PageHeader title="SMS reçus" />
+      <p className="-mt-4 mb-4 text-sm text-gray-600">Réponses des pros qui ne sont ni une note ni « NO » : ouvrez la mission pour agir, puis marquez le SMS traité.</p>
+      <nav className="mb-3 flex gap-2 text-sm">
+        <Link href="/admin/sms" className={tab(!all)}>Non traités</Link>
+        <Link href="/admin/sms?all=1" className={tab(all)}>Tous</Link>
+      </nav>
+      {messages.length === 0 ? <Empty>{all ? 'Aucun SMS reçu.' : 'Aucun SMS à traiter.'}</Empty> : (
+        <Table head={['Reçu le', 'De', 'Message', 'Mission', '']}>
+          {messages.map((s) => (
+            <tr key={s.id}>
+              <td className={tdClass}>{formatParis(s.createdAt)}</td>
+              <td className={tdClass}>{s.fromPhone}</td>
+              <td className={`${tdClass} max-w-md whitespace-pre-wrap`}>{s.body}</td>
+              <td className={tdClass}>{s.missionId ? <Link href={`/admin/missions/${s.missionId}`} className={linkClass}>Ouvrir la mission</Link> : '—'}</td>
+              <td className={tdClass}>
+                {s.handled ? <Badge tone="green">Traité</Badge> : (
+                  <ActionForm action={markHandledAction}>
+                    <input type="hidden" name="smsId" value={s.id} />
+                    <SubmitButton tone="secondary">Traité</SubmitButton>
+                  </ActionForm>
+                )}
+              </td>
+            </tr>
+          ))}
+        </Table>
+      )}
+    </>
+  )
+}
+```
+
+- [ ] **Step 2: Vérifier le typage, le lint, puis à la main**
+
+Run: `npx tsc --noEmit && npm run lint`
+Expected: aucune erreur.
+
+Run: `npm run dev`, connecté en admin, avec le jeu de démo :
+- `/admin/sms` : « Hi, can we move the visit to Friday morning? » du `+16175550143` ; « Ouvrir la mission » mène à la fiche « Back Bay Fence & Gate Co. », sur la ligne de la mission.
+- « Traité » → la ligne quitte « Non traités » ; « Tous » la montre avec le badge « Traité » ; la tuile du tableau de bord passe à 0.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add "app/admin/(app)/sms"
+git commit -m "feat(admin): inbound SMS inbox"
+```
+
+## Chunk 21: Back-office — validation, agents, réglages
+
+Mêmes règles qu’aux chunks 19 et 20 (`requireAdmin(['ADMIN'])` dans chaque page et chaque action, `redirect` hors des `try`, chemins `(app)` entre guillemets dans le terminal).
+
+### Task 69: Validation des visites
+
+**Files:**
+- Create: `app/admin/(app)/review/review-view.ts`, `app/admin/(app)/review/actions.ts`, `app/admin/(app)/review/page.tsx`, `app/admin/(app)/review/[id]/page.tsx`, `app/admin/(app)/review/[id]/validate-form.tsx`
+- Test: `app/admin/(app)/review/review-view.test.ts`
+
+- [ ] **Step 1: Écrire le test qui échoue (`app/admin/(app)/review/review-view.test.ts`)**
+
+```ts
+import { describe, expect, it } from 'vitest'
+import type { StepsData } from '@/modules/missions'
+import { proReplyText, stepRows } from './review-view'
+
+const t = (minute: string) => ({ clientAt: `2026-10-16T14:${minute}:00.000Z`, receivedAt: `2026-10-16T14:${minute}:03.000Z` })
+const steps: StepsData = {
+  checkout: t('45'),
+  checkin: { lat: 42.35671, lng: -71.06243, accuracy: 12.4, ...t('02') },
+  consent: { signerName: 'Frank Delgado', textVersion: 'consent-v1', signatureKey: 'missions/m1/signature-a.png', ...t('10') },
+  profile: { listingName: 'Delgado Concrete & Masonry', category: 'Concrete contractor', city: 'Boston', zip: '02108', mode: 'CLAIMED', ...t('25') },
+  invite: { result: 'INVITE_NOT_ALLOWED_YET', ...t('30') },
+  verification: { result: 'OTHER_METHOD_STARTED', method: 'Postcard', ...t('40') },
+}
+
+describe('stepRows', () => {
+  it('range les étapes dans l’ordre de la visite et résume chacune', () => {
+    const rows = stepRows(steps)
+    expect(rows.map((r) => r.name)).toEqual(['checkin', 'consent', 'profile', 'invite', 'verification', 'checkout'])
+    expect(rows[0]).toEqual({ name: 'checkin', label: 'Check-in', clientAt: '2026-10-16T14:02:00.000Z', receivedAt: '2026-10-16T14:02:03.000Z', detail: '42.35671, -71.06243 (± 12 m)' })
+    expect(rows.slice(1, 5).map((r) => r.detail)).toEqual([
+      'Signé par Frank Delgado (texte consent-v1)',
+      'Delgado Concrete & Masonry · Concrete contractor · Boston 02108 · Fiche existante revendiquée',
+      'Ajout d’utilisateurs pas encore proposé par Google',
+      'Autre méthode lancée : Postcard',
+    ])
+  })
+  it('ignore les étapes absentes', () => {
+    expect(stepRows({ checkin: steps.checkin }).map((r) => r.name)).toEqual(['checkin'])
+  })
+})
+
+describe('proReplyText', () => {
+  it('résume la réponse du pro au SMS après visite', () => {
+    const sent = new Date('2026-10-16T15:00:00Z')
+    expect(proReplyText({ postVisitSmsAt: null, proDenied: false, proRating: null })).toBe('SMS après visite pas encore envoyé.')
+    expect(proReplyText({ postVisitSmsAt: sent, proDenied: true, proRating: null })).toBe('Le pro a répondu NO : il conteste la visite.')
+    expect(proReplyText({ postVisitSmsAt: sent, proDenied: false, proRating: 2 })).toBe('Note du pro : 2/5')
+    expect(proReplyText({ postVisitSmsAt: sent, proDenied: false, proRating: null })).toBe('Pas encore de réponse du pro.')
+  })
+})
+```
+
+- [ ] **Step 2: Lancer le test pour vérifier qu'il échoue**
+
+Run: `npx vitest run "app/admin/(app)/review/review-view.test.ts"`
+Expected: FAIL (module `./review-view` introuvable).
+
+- [ ] **Step 3: Écrire `app/admin/(app)/review/review-view.ts`**
+
+```ts
+import { STEP_LABELS, VALUE_LABELS } from '@/app/admin/_lib/labels'
+import type { StepsData } from '@/modules/missions'
+
+export interface StepRow { name: string; label: string; clientAt: string; receivedAt: string; detail: string }
+
+type StepKey = keyof StepsData
+const ORDER: StepKey[] = ['checkin', 'consent', 'profile', 'invite', 'verification', 'checkout']
+const label = (value: string) => VALUE_LABELS[value] ?? value
+
+const DETAILS: { [K in StepKey]: (s: NonNullable<StepsData[K]>) => string } = {
+  checkin: (c) => `${c.lat.toFixed(5)}, ${c.lng.toFixed(5)} (± ${Math.round(c.accuracy)} m)`,
+  consent: (c) => `Signé par ${c.signerName} (texte ${c.textVersion})`,
+  profile: (p) => `${p.listingName} · ${p.category} · ${p.city} ${p.zip} · ${label(p.mode)}`,
+  invite: (i) => label(i.result),
+  verification: (v) => (v.method ? `${label(v.result)} : ${v.method}` : label(v.result)),
+  checkout: () => '',
+}
+
+/** Lignes du tableau « Étapes » : horodatages téléphone et serveur, et un résumé lisible de chaque étape. */
+export function stepRows(steps: StepsData): StepRow[] {
+  const rows: StepRow[] = []
+  for (const name of ORDER) {
+    const s = steps[name]
+    if (!s) continue
+    const detail = (DETAILS[name] as (step: typeof s) => string)(s)
+    rows.push({ name, label: STEP_LABELS[name], clientAt: s.clientAt, receivedAt: s.receivedAt, detail })
+  }
+  return rows
+}
+
+/** Réponse du pro au SMS après visite (la note ne vient jamais de l'agent, spec §10). */
+export function proReplyText(m: { postVisitSmsAt: Date | null; proDenied: boolean; proRating: number | null }): string {
+  if (!m.postVisitSmsAt) return 'SMS après visite pas encore envoyé.'
+  if (m.proDenied) return 'Le pro a répondu NO : il conteste la visite.'
+  if (m.proRating != null) return `Note du pro : ${m.proRating}/5`
+  return 'Pas encore de réponse du pro.'
+}
+```
+
+- [ ] **Step 4: Lancer le test**
+
+Run: `npx vitest run "app/admin/(app)/review/review-view.test.ts"`
+Expected: PASS (3 tests).
+
+- [ ] **Step 5: Écrire `app/admin/(app)/review/actions.ts`**
+
+Les trois décisions ramènent à la file avec un bandeau ; « Valider » renvoie `needsConfirmation` quand le pro a contesté la visite ou mis une note basse.
+
+```ts
+'use server'
+
+import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
+import { actionError, formText, type ActionState } from '@/app/admin/_lib/forms'
+import { runAction } from '@/app/admin/_lib/run-action'
+import { requireAdmin } from '@/lib/session'
+import { reject, requestFix, resolveFlag, validate } from '@/modules/review'
+
+export async function validateAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const admin = await requireAdmin(['ADMIN'])
+  let earnedCents: number
+  try {
+    const r = await validate(formText(fd, 'missionId'), admin.email, { confirmFlags: fd.get('confirmFlags') === 'on' })
+    if (!r.ok) return { error: r.error, needsConfirmation: r.needsConfirmation }
+    earnedCents = r.earnedCents
+  } catch (e) {
+    return { error: actionError(e) }
+  }
+  revalidatePath('/admin', 'layout')
+  redirect(`/admin/review?done=validated&amount=${earnedCents}`)
+}
+
+export async function requestFixAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const admin = await requireAdmin(['ADMIN'])
+  const message = formText(fd, 'message')
+  if (!message) return { error: 'Message obligatoire.' }
+  try {
+    await requestFix(formText(fd, 'missionId'), admin.email, message)
+  } catch (e) {
+    return { error: actionError(e) }
+  }
+  revalidatePath('/admin', 'layout')
+  redirect('/admin/review?done=fix')
+}
+
+export async function rejectAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const admin = await requireAdmin(['ADMIN'])
+  const reason = formText(fd, 'reason')
+  if (!reason) return { error: 'Motif obligatoire.' }
+  try {
+    await reject(formText(fd, 'missionId'), admin.email, reason, fd.get('markProLost') === 'on')
+  } catch (e) {
+    return { error: actionError(e) }
+  }
+  revalidatePath('/admin', 'layout')
+  redirect('/admin/review?done=rejected')
+}
+
+export async function resolveFlagAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const admin = await requireAdmin(['ADMIN'])
+  return runAction(() => resolveFlag(formText(fd, 'flagId'), admin.email), 'Alerte marquée résolue.')
+}
+```
+
+- [ ] **Step 6: Écrire la file (`app/admin/(app)/review/page.tsx`)**
+
+```tsx
+import Link from 'next/link'
+import { Badge, Banner, Empty, PageHeader, Table, linkClass, tdClass } from '@/app/admin/_components/ui'
+import { formatParis, formatUsd } from '@/app/admin/_lib/format'
+import { FRAUD_LABELS, MISSION_TYPE_LABELS } from '@/app/admin/_lib/labels'
+import { requireAdmin } from '@/lib/session'
+import { listQueue } from '@/modules/review'
+
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> }
+
+export default async function ReviewQueuePage({ searchParams }: Props) {
+  await requireAdmin(['ADMIN'])
+  const { done, amount } = await searchParams
+  const queue = await listQueue()
+  const cents = Number(amount)
+  const notice =
+    done === 'validated' ? `Visite validée${Number.isInteger(cents) ? ` : ${formatUsd(cents)} ajoutés au solde de l’agent` : ''}.`
+    : done === 'fix' ? 'Correction demandée : l’agent a reçu votre message par SMS.'
+    : done === 'rejected' ? 'Visite rejetée : l’agent a reçu le motif par SMS.'
+    : null
+
+  return (
+    <>
+      <PageHeader title={`Validation (${queue.length})`} />
+      {notice && <Banner tone="success">{notice}</Banner>}
+      {queue.length === 0 ? (
+        <Empty>Aucune visite à valider.</Empty>
+      ) : (
+        <Table head={['Soumise le', 'Pro', 'Type', 'Agent', 'Photos', 'Alertes', '']}>
+          {queue.map((m) => (
+            <tr key={m.id}>
+              <td className={tdClass}>{m.submittedAt ? formatParis(m.submittedAt) : '—'}</td>
+              <td className={tdClass}>{m.pro.businessName}<p className="text-xs text-gray-500">{m.pro.trade} · {m.pro.city}, {m.pro.state}</p></td>
+              <td className={tdClass}>{MISSION_TYPE_LABELS[m.type]}</td>
+              <td className={tdClass}>{m.agent ? `${m.agent.firstName} ${m.agent.lastName}` : '—'}</td>
+              <td className={tdClass}>{m.submission?._count.photos ?? 0}</td>
+              <td className={tdClass}>
+                <div className="flex flex-wrap gap-1">{m.flags.map((f) => <Badge key={f.id} tone="red">{FRAUD_LABELS[f.type]}</Badge>)}</div>
+              </td>
+              <td className={tdClass}><Link href={`/admin/review/${m.id}`} className={linkClass}>Examiner →</Link></td>
+            </tr>
+          ))}
+        </Table>
+      )}
+    </>
+  )
+}
+```
+
+- [ ] **Step 7: Écrire le formulaire « Valider » (`app/admin/(app)/review/[id]/validate-form.tsx`)**
+
+```tsx
+'use client'
+
+import { useActionState } from 'react'
+import { SubmitButton } from '@/app/admin/_components/action-form'
+import { validateAction } from '../actions'
+
+export function ValidateForm({ missionId }: { missionId: string }) {
+  const [state, formAction] = useActionState(validateAction, {})
+  return (
+    <form action={formAction} className="space-y-2">
+      <input type="hidden" name="missionId" value={missionId} />
+      {state.needsConfirmation && (
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" name="confirmFlags" required className="mt-0.5" /> Je confirme malgré l’alerte du pro
+        </label>
+      )}
+      {state.error && <p role="alert" className="text-sm text-red-700">{state.error}</p>}
+      <SubmitButton>Valider la visite</SubmitButton>
+    </form>
+  )
+}
+```
+
+- [ ] **Step 8: Écrire le détail (`app/admin/(app)/review/[id]/page.tsx`)**
+
+Toute mission dont la visite a été soumise s'y consulte ; les décisions n'apparaissent qu'en `SUBMITTED`. Photos et signature passent par `/api/files/<clé>` (accès vérifié par la route).
+
+```tsx
+import Link from 'next/link'
+import { notFound } from 'next/navigation'
+import { ActionForm, SubmitButton } from '@/app/admin/_components/action-form'
+import { Badge, Banner, Card, Empty, Field, PageHeader, Table, inputClass, linkClass, tdClass } from '@/app/admin/_components/ui'
+import { formatParis, formatStamp, mapsUrl } from '@/app/admin/_lib/format'
+import { FRAUD_LABELS, MISSION_STATUS_LABELS, MISSION_TYPE_LABELS, PHOTO_CATEGORY_LABELS } from '@/app/admin/_lib/labels'
+import { requireAdmin } from '@/lib/session'
+import { formatSlot } from '@/lib/time'
+import { getReviewDetail } from '@/modules/review'
+import { rejectAction, requestFixAction, resolveFlagAction } from '../actions'
+import { proReplyText, stepRows } from '../review-view'
+import { ValidateForm } from './validate-form'
+
+export default async function ReviewDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireAdmin(['ADMIN'])
+  const m = await getReviewDetail((await params).id)
+  if (!m) notFound()
+  const tz = m.pro.timeZone
+  const { checkin, consent } = m.steps
+  const photos = m.submission?.photos ?? []
+
+  return (
+    <>
+      <PageHeader title={m.pro.businessName} back={{ href: '/admin/review', label: 'Validation' }} />
+      <p className="-mt-4 mb-4 text-sm text-gray-600">
+        {MISSION_TYPE_LABELS[m.type]} · {m.pro.trade} · {m.pro.city}, {m.pro.state} · créneau {formatSlot(m.slotAt, tz)} (heure du pro) · agent{' '}
+        {m.agent ? <Link href={`/admin/agents/${m.agent.id}`} className={linkClass}>{m.agent.firstName} {m.agent.lastName}</Link> : '—'}
+        {m.submittedAt && <> · soumise le {formatParis(m.submittedAt)}</>}
+      </p>
+      {m.status !== 'SUBMITTED' && (
+        <Banner>
+          Mission « {MISSION_STATUS_LABELS[m.status]} » : lecture seule.
+          {m.status === 'NEEDS_FIX' && m.fixMessage && <> Correction demandée : « {m.fixMessage} »</>}
+          {m.rejectReason && <> Motif du rejet : « {m.rejectReason} »</>}
+        </Banner>
+      )}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <Card title="Check-in">
+            {checkin ? (
+              <div className="space-y-1 text-sm">
+                <p>
+                  Distance à l’adresse du pro : <strong>{m.checkinDistanceMeters != null ? `${m.checkinDistanceMeters} m` : 'inconnue (pro sans coordonnées)'}</strong>
+                  {' '}· précision GPS ± {Math.round(checkin.accuracy)} m
+                </p>
+                <p>
+                  <a href={mapsUrl(checkin.lat, checkin.lng)} target="_blank" rel="noreferrer" className={linkClass}>Check-in sur Google Maps</a>
+                  {m.pro.lat != null && m.pro.lng != null && (
+                    <> · <a href={mapsUrl(m.pro.lat, m.pro.lng)} target="_blank" rel="noreferrer" className={linkClass}>Adresse du pro</a></>
+                  )}
+                </p>
+              </div>
+            ) : <Empty>Pas de check-in.</Empty>}
+          </Card>
+          <Card title="Étapes (heure du pro)">
+            <Table head={['Étape', 'Téléphone', 'Serveur', 'Détail']}>
+              {stepRows(m.steps).map((r) => (
+                <tr key={r.name}>
+                  <td className={tdClass}>{r.label}</td>
+                  <td className={tdClass}>{formatStamp(r.clientAt, tz)}</td>
+                  <td className={tdClass}>{formatStamp(r.receivedAt, tz)}</td>
+                  <td className={tdClass}>{r.detail}</td>
+                </tr>
+              ))}
+            </Table>
+          </Card>
+          <Card title={`Photos (${photos.length})`}>
+            {photos.length === 0 ? <Empty>Aucune photo.</Empty> : (
+              <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+                {photos.map((p) => (
+                  <li key={p.id} className="text-xs text-gray-600">
+                    <a href={`/api/files/${p.storageKey}`} target="_blank" rel="noreferrer">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- fichier privé servi par /api/files */}
+                      <img src={`/api/files/${p.storageKey}`} alt={PHOTO_CATEGORY_LABELS[p.category]} loading="lazy" className="aspect-[4/3] w-full rounded-md border border-gray-200 object-cover" />
+                    </a>
+                    <p className="mt-1 font-medium text-gray-800">{PHOTO_CATEGORY_LABELS[p.category]}</p>
+                    <p>Reçue {formatStamp(p.receivedAt, tz)}</p>
+                    {p.exifTakenAt && <p>Prise (EXIF) {formatStamp(p.exifTakenAt, tz)}</p>}
+                    {p.exifLat != null && p.exifLng != null && (
+                      <a href={mapsUrl(p.exifLat, p.exifLng)} target="_blank" rel="noreferrer" className={linkClass}>Position EXIF</a>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+          <Card title="Accord signé par le pro">
+            {consent ? (
+              <div className="text-sm">
+                {/* eslint-disable-next-line @next/next/no-img-element -- fichier privé servi par /api/files */}
+                <img src={`/api/files/${consent.signatureKey}`} alt={`Signature de ${consent.signerName}`} className="h-32 rounded-md border border-gray-200 bg-white" />
+                <p className="mt-1 text-gray-600">{consent.signerName} · texte {consent.textVersion}</p>
+              </div>
+            ) : <Empty>Pas d’accord signé.</Empty>}
+          </Card>
+        </div>
+        <div className="space-y-6">
+          {m.status === 'SUBMITTED' && (
+            <Card title="Décision">
+              <div className="space-y-6">
+                <ValidateForm missionId={m.id} />
+                <ActionForm action={requestFixAction} className="space-y-2">
+                  <input type="hidden" name="missionId" value={m.id} />
+                  <Field label="Demander une correction" help="En anglais : envoyé tel quel à l’agent par SMS (ex. Add a photo of the truck.).">
+                    <textarea name="message" required rows={3} maxLength={300} className={inputClass} />
+                  </Field>
+                  <SubmitButton tone="secondary">Envoyer la demande</SubmitButton>
+                </ActionForm>
+                <ActionForm action={rejectAction} className="space-y-2">
+                  <input type="hidden" name="missionId" value={m.id} />
+                  <Field label="Rejeter la visite" help="Motif en anglais : envoyé tel quel à l’agent par SMS.">
+                    <textarea name="reason" required rows={2} maxLength={300} className={inputClass} />
+                  </Field>
+                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="markProLost" /> Marquer le pro perdu</label>
+                  <SubmitButton tone="danger">Rejeter</SubmitButton>
+                </ActionForm>
+              </div>
+            </Card>
+          )}
+
+          <Card title="Alertes">
+            {m.flags.length === 0 ? <Empty>Aucune alerte.</Empty> : (
+              <ul className="space-y-3 text-sm">
+                {m.flags.map((f) => (
+                  <li key={f.id}>
+                    <p className="font-medium">
+                      {FRAUD_LABELS[f.type]} {f.resolved ? <Badge>Résolue</Badge> : <Badge tone="red">Ouverte</Badge>}
+                    </p>
+                    <p className="text-gray-600">{f.detail}</p>
+                    {!f.resolved && (
+                      <ActionForm action={resolveFlagAction}>
+                        <input type="hidden" name="flagId" value={f.id} />
+                        <SubmitButton tone="secondary">Résolue</SubmitButton>
+                      </ActionForm>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+          <Card title="Réponse SMS du pro">
+            <p className="text-sm">{proReplyText(m)}</p>
+          </Card>
+          <Card title="Mission">
+            <p className="text-sm">Catégorie suggérée : {m.suggestedCategory}</p>
+            {m.instructions && <p className="mt-2 whitespace-pre-line text-sm text-gray-700">{m.instructions}</p>}
+            <p className="mt-2 text-sm"><Link href={`/admin/pros/${m.proId}`} className={linkClass}>Fiche du pro</Link></p>
+          </Card>
+        </div>
+      </div>
+    </>
+  )
+}
+```
+
+- [ ] **Step 9: Vérifier le typage et le lint**
+
+Run: `npx tsc --noEmit && npm run lint`
+Expected: aucune erreur (les deux `<img>` portent leur commentaire de désactivation).
+
+- [ ] **Step 10: Vérification manuelle**
+
+Run: `npm run dev`, connecté en admin, avec le jeu de démo (visite Delgado SUBMITTED) :
+- `/admin/review` : une ligne « Delgado Concrete… », 10 photos, badge rouge « Note basse du pro ».
+- Détail : distance ≈ 40 m, précision ± 12 m, deux liens Google Maps qui s'ouvrent au bon endroit ; tableau des 6 étapes avec heure téléphone et heure serveur (3 s d'écart) à l'heure de Boston ; grille de 10 photos colorées qui s'ouvrent en grand ; signature (trait sinueux) ; « Note du pro : 2/5 » ; consignes sur deux lignes.
+- Ouvrir `/api/files/<clé d'une photo>` dans une fenêtre privée (sans session) → 404.
+- « Valider la visite » → « Le pro a signalé un problème : confirmez pour valider quand même. » et la case « Je confirme malgré l’alerte du pro » apparaît ; « Valider » sans la cocher → bloqué par le navigateur.
+- Alerte « Note basse du pro » → « Résolue » → « Alerte marquée résolue. », badge « Résolue ».
+- « Valider la visite » → retour sur la file, bandeau « Visite validée : 40,00 $ ajoutés au solde de l’agent. », file vide ; le terminal de `npm run dev` montre `[sms:console] → +16175550101 : … $40.00 was added …`. Le détail (`/admin/review/<id>`) est en lecture seule « Validée ».
+- Correction et rejet : `psql agents_terrain -c "UPDATE \"Mission\" SET status = 'SUBMITTED' WHERE status = 'VALIDATED'"` (remet la visite dans la file). « Envoyer la demande » sans message → bloqué ; avec `Add a photo of the truck.` → bandeau « Correction demandée… », SMS visible dans le terminal, le détail montre « Correction demandée : « Add a photo of the truck. » ». Remettre en file : `psql agents_terrain -c "UPDATE \"Mission\" SET status = 'SUBMITTED' WHERE status = 'NEEDS_FIX'"`, puis « Rejeter » avec `Check-in too far from the business.` et « Marquer le pro perdu » → bandeau « Visite rejetée… », la fiche du pro est « Perdu » avec ce motif.
+
+- [ ] **Step 11: Commit**
+
+```bash
+git add "app/admin/(app)/review"
+git commit -m "feat(admin): review queue and visit detail with validate, fix and reject"
+```
+
+### Task 70: Agents
+
+**Files:**
+- Modify: `modules/agents/index.ts` (fuseau du pro dans `getAgent`, pour afficher les créneaux à l'heure du pro)
+- Create: `app/admin/(app)/agents/actions.ts`, `app/admin/(app)/agents/page.tsx`, `app/admin/(app)/agents/[id]/page.tsx`
+
+- [ ] **Step 1: Ajouter le fuseau du pro à `getAgent`**
+
+Dans `modules/agents/index.ts`, fonction `getAgent`, remplacer exactement :
+
+```ts
+      missions: { orderBy: { slotAt: 'desc' }, take: 50, include: { pro: { select: { businessName: true, city: true, state: true } } } },
+```
+
+par :
+
+```ts
+      missions: { orderBy: { slotAt: 'desc' }, take: 50, include: { pro: { select: { businessName: true, city: true, state: true, timeZone: true } } } },
+```
+
+Run: `npx vitest run modules/agents/agents.int.test.ts`
+Expected: PASS (3 tests).
+
+- [ ] **Step 2: Écrire `app/admin/(app)/agents/actions.ts`**
+
+```ts
+'use server'
+
+import { formText, type ActionState } from '@/app/admin/_lib/forms'
+import { runAction } from '@/app/admin/_lib/run-action'
+import { requireAdmin } from '@/lib/session'
+import { refuseAgent, unlockAgent } from '@/modules/academy'
+import { reactivateAgent, suspendAgent } from '@/modules/agents'
+import { voidEarning } from '@/modules/ledger'
+
+export async function suspendAgentAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const admin = await requireAdmin(['ADMIN'])
+  return runAction(() => suspendAgent(formText(fd, 'agentId'), admin.email, formText(fd, 'reason')), 'Agent suspendu ; ses missions acceptées sont remises en ligne.')
+}
+
+export async function reactivateAgentAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const admin = await requireAdmin(['ADMIN'])
+  return runAction(() => reactivateAgent(formText(fd, 'agentId'), admin.email), 'Agent réactivé.')
+}
+
+export async function unlockAgentAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const admin = await requireAdmin(['ADMIN'])
+  return runAction(() => unlockAgent(formText(fd, 'agentId'), admin.email), 'Agent débloqué : il peut repasser le quiz.')
+}
+
+export async function refuseAgentAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const admin = await requireAdmin(['ADMIN'])
+  const reason = formText(fd, 'reason')
+  if (!reason) return { error: 'Motif obligatoire.' }
+  return runAction(() => refuseAgent(formText(fd, 'agentId'), admin.email, reason), 'Candidature refusée.')
+}
+
+export async function voidEarningAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const admin = await requireAdmin(['ADMIN'])
+  return runAction(() => voidEarning(formText(fd, 'earningId'), formText(fd, 'reason'), admin.email), 'Gain annulé.')
+}
+```
+
+- [ ] **Step 3: Écrire la liste (`app/admin/(app)/agents/page.tsx`)**
+
+```tsx
+import Link from 'next/link'
+import { Badge, Empty, FilterLinks, PageHeader, Table, linkClass, tdClass } from '@/app/admin/_components/ui'
+import { formatParis } from '@/app/admin/_lib/format'
+import { pickEnum } from '@/app/admin/_lib/forms'
+import { AGENT_STATUSES, AGENT_STATUS_LABELS } from '@/app/admin/_lib/labels'
+import { requireAdmin } from '@/lib/session'
+import { listAgents } from '@/modules/agents'
+
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> }
+
+export default async function AgentsPage({ searchParams }: Props) {
+  await requireAdmin(['ADMIN'])
+  const status = pickEnum((await searchParams).status, AGENT_STATUSES)
+  const agents = await listAgents({ status })
+  return (
+    <>
+      <PageHeader title="Agents" />
+      <FilterLinks base="/admin/agents" current={status} options={AGENT_STATUSES} labels={AGENT_STATUS_LABELS} />
+      {agents.length === 0 ? <Empty>Aucun agent.</Empty> : (
+        <Table head={['Agent', 'Téléphone', 'Email', 'Secteur', 'Statut', 'Inscrit le']}>
+          {agents.map((a) => (
+            <tr key={a.id}>
+              <td className={tdClass}><Link href={`/admin/agents/${a.id}`} className={linkClass}>{a.firstName} {a.lastName}</Link></td>
+              <td className={tdClass}>{a.phone}</td>
+              <td className={tdClass}>{a.email}</td>
+              <td className={tdClass}>ZIP {a.zip} · {a.radiusMiles} miles{a.hasCar ? '' : ' · sans voiture'}</td>
+              <td className={tdClass}><Badge>{AGENT_STATUS_LABELS[a.status]}</Badge></td>
+              <td className={tdClass}>{formatParis(a.createdAt)}</td>
+            </tr>
+          ))}
+        </Table>
+      )}
+    </>
+  )
+}
+```
+
+- [ ] **Step 4: Écrire la fiche (`app/admin/(app)/agents/[id]/page.tsx`)**
+
+```tsx
+import type { MissionStatus } from '@prisma/client'
+import Link from 'next/link'
+import { notFound } from 'next/navigation'
+import { ActionForm, SubmitButton } from '@/app/admin/_components/action-form'
+import { Badge, Card, Empty, PageHeader, Table, inputClass, linkClass, tdClass } from '@/app/admin/_components/ui'
+import { formatParis, formatUsd, missionHref } from '@/app/admin/_lib/format'
+import { AGENT_STATUS_LABELS, EARNING_STATUS_LABELS, FRAUD_LABELS, LEVEL_LABELS, MISSION_STATUS_LABELS, MISSION_TYPE_LABELS, TIER_LABELS } from '@/app/admin/_lib/labels'
+import { requireAdmin } from '@/lib/session'
+import { formatSlot } from '@/lib/time'
+import { agentStats, getAgent } from '@/modules/agents'
+import { levelFor, listEarnings } from '@/modules/ledger'
+import { getSettings } from '@/modules/settings'
+import { resolveFlagAction } from '../../review/actions'
+import { reactivateAgentAction, refuseAgentAction, suspendAgentAction, unlockAgentAction, voidEarningAction } from '../actions'
+
+export default async function AgentPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireAdmin(['ADMIN'])
+  const agent = await getAgent((await params).id)
+  if (!agent) notFound()
+  const [stats, earnings, settings] = await Promise.all([agentStats(agent.id), listEarnings(agent.id), getSettings()])
+  const level = levelFor(stats.byStatus.VALIDATED ?? 0, settings.levels)
+  const byStatus = Object.entries(stats.byStatus).map(([s, n]) => `${MISSION_STATUS_LABELS[s as MissionStatus]} : ${n}`).join(' · ')
+  const hidden = <input type="hidden" name="agentId" value={agent.id} />
+
+  return (
+    <>
+      <PageHeader title={`${agent.firstName} ${agent.lastName}`} back={{ href: '/admin/agents', label: 'Agents' }} />
+      <p className="-mt-4 mb-6 flex gap-2">
+        <Badge>{AGENT_STATUS_LABELS[agent.status]}</Badge>
+        <Badge tone="green">Niveau {LEVEL_LABELS[level.name]} (+{level.bonusPct} %)</Badge>
+      </p>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <Card title="Statistiques">
+            <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+              <div><dt className="text-gray-500">Taux de validation</dt><dd className="text-xl font-semibold">{stats.validationRatePct != null ? `${stats.validationRatePct} %` : '—'}</dd></div>
+              <div><dt className="text-gray-500">Note moyenne des pros</dt><dd className="text-xl font-semibold">{stats.avgProRating != null ? `${stats.avgProRating}/5` : '—'}</dd></div>
+              <div><dt className="text-gray-500">Alertes ouvertes</dt><dd className="text-xl font-semibold">{stats.openFlags}</dd></div>
+              <div><dt className="text-gray-500">Solde à payer</dt><dd className="text-xl font-semibold">{formatUsd(stats.balanceCents)}</dd></div>
+            </dl>
+            <p className="mt-3 text-sm text-gray-600">Missions : {byStatus || 'aucune'}</p>
+          </Card>
+          <Card title="Missions (50 dernières)">
+            {agent.missions.length === 0 ? <Empty>Aucune mission.</Empty> : (
+              <Table head={['Créneau (heure du pro)', 'Pro', 'Type', 'Statut']}>
+                {agent.missions.map((m) => (
+                  <tr key={m.id}>
+                    <td className={tdClass}><Link href={missionHref(m)} className={linkClass}>{formatSlot(m.slotAt, m.pro.timeZone)}</Link></td>
+                    <td className={tdClass}>{m.pro.businessName}<p className="text-xs text-gray-500">{m.pro.city}, {m.pro.state}</p></td>
+                    <td className={tdClass}>{MISSION_TYPE_LABELS[m.type]}</td>
+                    <td className={tdClass}><Badge>{MISSION_STATUS_LABELS[m.status]}</Badge></td>
+                  </tr>
+                ))}
+              </Table>
+            )}
+          </Card>
+          <Card title="Gains">
+            {earnings.length === 0 ? <Empty>Aucun gain.</Empty> : (
+              <Table head={['Date', 'Palier', 'Mission', 'Montant', 'Statut', '']}>
+                {earnings.map((e) => (
+                  <tr key={e.id}>
+                    <td className={tdClass}>{formatParis(e.createdAt)}</td>
+                    <td className={tdClass}>{TIER_LABELS[e.tier]}</td>
+                    <td className={tdClass}><Link href={`/admin/missions/${e.missionId}`} className={linkClass}>{e.mission.pro.trade} · {e.mission.pro.city}, {e.mission.pro.state}</Link></td>
+                    <td className={tdClass}>{formatUsd(e.amountCents)}{e.levelBonusPct > 0 && <p className="text-xs text-gray-500">dont niveau +{e.levelBonusPct} %</p>}</td>
+                    <td className={tdClass}>
+                      <Badge tone={e.status === 'VOID' ? 'red' : 'gray'}>{EARNING_STATUS_LABELS[e.status]}</Badge>
+                      {e.voidReason && <p className="mt-1 text-xs text-gray-500">{e.voidReason} ({e.voidedBy})</p>}
+                    </td>
+                    <td className={tdClass}>
+                      {e.status === 'PAYABLE' && (
+                        <ActionForm action={voidEarningAction}>
+                          <input type="hidden" name="earningId" value={e.id} />
+                          <input name="reason" required placeholder="Motif" aria-label="Motif de l’annulation" className={`${inputClass} w-40`} />
+                          <SubmitButton tone="danger">Annuler ce gain</SubmitButton>
+                        </ActionForm>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </Table>
+            )}
+          </Card>
+        </div>
+        <div className="space-y-6">
+          <Card title="Actions">
+            {agent.status === 'ACTIVE' && (
+              <ActionForm action={suspendAgentAction} className="space-y-2">
+                {hidden}
+                <input name="reason" required placeholder="Motif de la suspension" aria-label="Motif" className={inputClass} />
+                <p className="text-xs text-gray-500">Ses missions acceptées sont remises en ligne.</p>
+                <SubmitButton tone="danger">Suspendre</SubmitButton>
+              </ActionForm>
+            )}
+            {agent.status === 'SUSPENDED' && (
+              <ActionForm action={reactivateAgentAction}>{hidden}<SubmitButton>Réactiver</SubmitButton></ActionForm>
+            )}
+            {agent.status === 'LOCKED' && (
+              <div className="space-y-4">
+                <ActionForm action={unlockAgentAction}>{hidden}<SubmitButton>Débloquer (nouveaux essais au quiz)</SubmitButton></ActionForm>
+                <ActionForm action={refuseAgentAction} className="space-y-2">
+                  {hidden}
+                  <input name="reason" required placeholder="Motif du refus" aria-label="Motif" className={inputClass} />
+                  <SubmitButton tone="danger">Refuser la candidature</SubmitButton>
+                </ActionForm>
+              </div>
+            )}
+            {!['ACTIVE', 'SUSPENDED', 'LOCKED'].includes(agent.status) && <Empty>Aucune action pour ce statut.</Empty>}
+          </Card>
+          <Card title="Identité">
+            <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-1.5 text-sm">
+              <dt className="text-gray-500">Email</dt><dd className="break-all">{agent.email}</dd>
+              <dt className="text-gray-500">Téléphone</dt><dd>{agent.phone}</dd>
+              <dt className="text-gray-500">Naissance</dt><dd>{agent.birthDate.toISOString().slice(0, 10)}</dd>
+              <dt className="text-gray-500">Secteur</dt><dd>ZIP {agent.zip} · {agent.radiusMiles} miles</dd>
+              <dt className="text-gray-500">Voiture</dt><dd>{agent.hasCar ? 'Oui' : 'Non'}</dd>
+              <dt className="text-gray-500">Disponibilités</dt><dd>{agent.availability.join(', ') || '—'}</dd>
+              <dt className="text-gray-500">Contrat</dt>
+              <dd>{agent.contractSignedAt ? `${agent.contractVersion} signé le ${formatParis(agent.contractSignedAt)}` : 'Non signé'}</dd>
+              <dt className="text-gray-500">Inscrit le</dt><dd>{formatParis(agent.createdAt)}</dd>
+            </dl>
+          </Card>
+          <Card title={`Alertes ouvertes (${agent.flags.length})`}>
+            {agent.flags.length === 0 ? <Empty>Aucune.</Empty> : (
+              <ul className="space-y-3 text-sm">
+                {agent.flags.map((f) => (
+                  <li key={f.id}>
+                    <p className="font-medium">{FRAUD_LABELS[f.type]}</p>
+                    <p className="text-gray-600">{f.detail} · <Link href={`/admin/missions/${f.missionId}`} className={linkClass}>mission</Link></p>
+                    <ActionForm action={resolveFlagAction}>
+                      <input type="hidden" name="flagId" value={f.id} />
+                      <SubmitButton tone="secondary">Résolue</SubmitButton>
+                    </ActionForm>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+          <Card title="Quiz">
+            <p className="mb-2 text-sm text-gray-600">Échecs consécutifs : {agent.failedAttempts}</p>
+            {agent.attempts.length === 0 ? <Empty>Aucune tentative.</Empty> : (
+              <ul className="space-y-1 text-sm">
+                {agent.attempts.map((t) => (
+                  <li key={t.id}>{formatParis(t.createdAt)} · {t.score} % · {t.passed ? 'réussi' : 'échoué'}</li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </div>
+      </div>
+    </>
+  )
+}
+```
+
+- [ ] **Step 5: Vérifier le typage et le lint**
+
+Run: `npx tsc --noEmit && npm run lint`
+Expected: aucune erreur.
+
+- [ ] **Step 6: Vérification manuelle**
+
+Run: `npm run dev`, connecté en admin, avec le jeu de démo :
+- `/admin/agents` : Maya (Actif) et Sam (Bloqué (quiz)) ; la pastille « Bloqué (quiz) » ne garde que Sam ; le lien du tableau de bord « Agents bloqués au quiz » ouvre ce filtre.
+- Fiche de Sam : 3 tentatives échouées (65, 60 et 55 %), « Échecs consécutifs : 3 ». « Débloquer » → « Agent débloqué… », statut « En formation », « Échecs consécutifs : 0 ». Remettre `psql agents_terrain -c "UPDATE \"Agent\" SET status = 'LOCKED' WHERE email = 'sam.demo@example.com'"` ; « Refuser la candidature » sans motif → bloqué ; avec `Quiz échoué 3 fois` → statut « Refusé », plus aucune action.
+- Fiche de Maya (après la validation du Task 74) : niveau Bronze, taux de validation, gain « Visite » de 40,00 $ « À payer », solde 40,00 $, créneaux à l'heure de Boston menant à la visite. « Annuler ce gain » avec `Test` → « Gain annulé. », gain « Annulé » avec le motif et votre email, solde 0,00 $.
+- Maya : « Suspendre » avec `Test` → statut « Suspendu », bouton « Réactiver » → « Actif ».
+- « Alertes ouvertes » : poser une alerte (`psql agents_terrain -c "UPDATE \"FraudFlag\" SET resolved = false"`), recharger, « Résolue » → elle disparaît de la liste ; son lien « mission » ouvre la visite.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add modules/agents/index.ts "app/admin/(app)/agents"
+git commit -m "feat(admin): agents list and agent page with actions, stats and earnings"
+```
+
+### Task 71: Réglages (rôle ADMIN) et vérification d'ensemble
+
+**Files:**
+- Create: `app/admin/(app)/settings/settings-form-data.ts`, `app/admin/(app)/settings/actions.ts`, `app/admin/(app)/settings/settings-form.tsx`, `app/admin/(app)/settings/page.tsx`
+- Test: `app/admin/(app)/settings/settings-form-data.test.ts`
+
+- [ ] **Step 1: Écrire le test qui échoue (`app/admin/(app)/settings/settings-form-data.test.ts`)**
+
+```ts
+import { describe, expect, it } from 'vitest'
+import { DEFAULT_SETTINGS, SettingsSchema } from '@/modules/settings'
+import { settingsErrors, settingsFromForm, settingsToFormDefaults } from './settings-form-data'
+
+function formOf(values: Record<string, string>): FormData {
+  const fd = new FormData()
+  for (const [k, v] of Object.entries(values)) fd.set(k, v)
+  return fd
+}
+const defaults = settingsToFormDefaults(DEFAULT_SETTINGS)
+
+describe('formulaire des réglages', () => {
+  it('affiche les montants en dollars et relit exactement les réglages', () => {
+    expect(defaults).toMatchObject({ tier_VISIT: '40.00', tier_RETURN_VISIT: '20.00', level_1_minValidated: '5', level_1_bonusPct: '10', widenRadiusMiles: '50' })
+    expect(settingsFromForm(formOf(defaults))).toEqual({ ok: true, value: DEFAULT_SETTINGS })
+  })
+  it('convertit les dollars en cents, virgule acceptée', () => {
+    const r = settingsFromForm(formOf({ ...defaults, tier_LIVE: '27,5' }))
+    expect(r.ok && r.value.tierAmountsCents.LIVE).toBe(2750)
+  })
+  it('signale chaque champ illisible', () => {
+    expect(settingsFromForm(formOf({ ...defaults, tier_VISIT: 'abc', level_1_bonusPct: '10.5', widenRadiusMiles: '' }))).toEqual({
+      ok: false,
+      fieldErrors: { tier_VISIT: 'Montant invalide (ex. 40 ou 40.50)', level_1_bonusPct: 'Nombre entier attendu', widenRadiusMiles: 'Nombre entier attendu' },
+    })
+  })
+})
+
+describe('settingsErrors', () => {
+  it('rattache les erreurs de bornes au bon champ, en français', () => {
+    const levels = DEFAULT_SETTINGS.levels.map((l) => (l.name === 'GOLD' ? { ...l, bonusPct: 150 } : l))
+    const parsed = SettingsSchema.safeParse({ ...DEFAULT_SETTINGS, levels, widenRadiusMiles: 0 })
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) expect(settingsErrors(parsed.error.issues)).toEqual({ level_2_bonusPct: 'Doit être au plus 100', widenRadiusMiles: 'Doit être au moins 1' })
+  })
+  it('rattache la règle « un niveau commence à 0 » à l’ensemble des niveaux', () => {
+    const levels = DEFAULT_SETTINGS.levels.map((l) => ({ ...l, minValidated: l.minValidated + 1 }))
+    const parsed = SettingsSchema.safeParse({ ...DEFAULT_SETTINGS, levels })
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) expect(settingsErrors(parsed.error.issues)).toEqual({ levels: 'Un niveau doit commencer à 0 mission' })
+  })
+})
+```
+
+- [ ] **Step 2: Lancer le test pour vérifier qu'il échoue**
+
+Run: `npx vitest run "app/admin/(app)/settings"`
+Expected: FAIL (module `./settings-form-data` introuvable).
+
+- [ ] **Step 3: Écrire `app/admin/(app)/settings/settings-form-data.ts`**
+
+Importé aussi par le formulaire client : seulement un `import type` depuis `@/modules/settings`.
+
+```ts
+import { centsToDollarsInput, dollarsToCents } from '@/app/admin/_lib/format'
+import type { Settings } from '@/modules/settings'
+
+// Champs : tier_<PALIER> en dollars, level_<i>_minValidated et level_<i>_bonusPct (0 Bronze, 1 Silver, 2 Gold),
+// widenRadiusMiles. Les bornes sont vérifiées ensuite par SettingsSchema.
+export const TIER_KEYS = ['VISIT', 'LIVE', 'CLIENT', 'RETURN_VISIT'] as const
+export const LEVEL_NAMES = ['BRONZE', 'SILVER', 'GOLD'] as const
+
+export function settingsToFormDefaults(s: Settings): Record<string, string> {
+  const out: Record<string, string> = { widenRadiusMiles: String(s.widenRadiusMiles) }
+  for (const tier of TIER_KEYS) out[`tier_${tier}`] = centsToDollarsInput(s.tierAmountsCents[tier])
+  LEVEL_NAMES.forEach((name, i) => {
+    const level = s.levels.find((l) => l.name === name)
+    out[`level_${i}_minValidated`] = String(level?.minValidated ?? '')
+    out[`level_${i}_bonusPct`] = String(level?.bonusPct ?? '')
+  })
+  return out
+}
+
+export function settingsFromForm(fd: FormData): { ok: true; value: Settings } | { ok: false; fieldErrors: Record<string, string> } {
+  const fieldErrors: Record<string, string> = {}
+  const text = (name: string) => {
+    const v = fd.get(name)
+    return typeof v === 'string' ? v.trim() : ''
+  }
+  const int = (name: string) => {
+    if (!/^\d{1,6}$/.test(text(name))) fieldErrors[name] = 'Nombre entier attendu'
+    return Number(text(name))
+  }
+  const cents = (name: string) => {
+    const c = dollarsToCents(text(name))
+    if (c == null) fieldErrors[name] = 'Montant invalide (ex. 40 ou 40.50)'
+    return c ?? 0
+  }
+  const value: Settings = {
+    tierAmountsCents: { VISIT: cents('tier_VISIT'), LIVE: cents('tier_LIVE'), CLIENT: cents('tier_CLIENT'), RETURN_VISIT: cents('tier_RETURN_VISIT') },
+    levels: LEVEL_NAMES.map((name, i) => ({ name, minValidated: int(`level_${i}_minValidated`), bonusPct: int(`level_${i}_bonusPct`) })),
+    widenRadiusMiles: int('widenRadiusMiles'),
+  }
+  return Object.keys(fieldErrors).length > 0 ? { ok: false, fieldErrors } : { ok: true, value }
+}
+
+type Issue = { code: string; path: readonly PropertyKey[]; message: string; minimum?: unknown; maximum?: unknown }
+
+/** Erreurs de SettingsSchema → champ du formulaire, message en français. */
+export function settingsErrors(issues: readonly Issue[]): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const issue of issues) {
+    const [head, a, b] = issue.path
+    const field =
+      head === 'tierAmountsCents' && typeof a === 'string' ? `tier_${a}`
+      : head === 'levels' && typeof a === 'number' && typeof b === 'string' ? `level_${a}_${b}`
+      : typeof head === 'string' ? head
+      : 'form'
+    const message =
+      issue.code === 'too_small' ? `Doit être au moins ${String(issue.minimum)}`
+      : issue.code === 'too_big' ? `Doit être au plus ${String(issue.maximum)}`
+      : issue.message
+    out[field] ??= message
+  }
+  return out
+}
+```
+
+- [ ] **Step 4: Lancer le test**
+
+Run: `npx vitest run "app/admin/(app)/settings"`
+Expected: PASS (5 tests).
+
+- [ ] **Step 5: Écrire l'action, le formulaire et la page**
+
+`app/admin/(app)/settings/actions.ts` :
+
+```ts
+'use server'
+
+import { revalidatePath } from 'next/cache'
+import { actionError, formValues, type ActionState } from '@/app/admin/_lib/forms'
+import { requireAdmin } from '@/lib/session'
+import { SettingsSchema, saveSettings } from '@/modules/settings'
+import { settingsErrors, settingsFromForm } from './settings-form-data'
+
+export async function saveSettingsAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const admin = await requireAdmin(['ADMIN'])
+  const values = formValues(fd)
+  const read = settingsFromForm(fd)
+  if (!read.ok) return { fieldErrors: read.fieldErrors, values }
+  const parsed = SettingsSchema.safeParse(read.value)
+  if (!parsed.success) return { fieldErrors: settingsErrors(parsed.error.issues), values }
+  try {
+    await saveSettings(parsed.data, admin.email)
+  } catch (e) {
+    return { error: actionError(e), values }
+  }
+  revalidatePath('/admin', 'layout')
+  return { ok: 'Réglages enregistrés. Ils comptent pour les prochains gains ; les gains déjà créés ne changent pas.', values }
+}
+```
+
+`app/admin/(app)/settings/settings-form.tsx` :
+
+```tsx
+'use client'
+
+import { useActionState } from 'react'
+import { SubmitButton } from '@/app/admin/_components/action-form'
+import { Field, inputClass } from '@/app/admin/_components/ui'
+import { LEVEL_LABELS, TIER_LABELS } from '@/app/admin/_lib/labels'
+import { saveSettingsAction } from './actions'
+import { LEVEL_NAMES, TIER_KEYS } from './settings-form-data'
+
+const box = 'rounded-lg border border-gray-200 bg-white p-4'
+
+export function SettingsForm({ defaults }: { defaults: Record<string, string> }) {
+  const [state, formAction] = useActionState(saveSettingsAction, {})
+  const v: Record<string, string | undefined> = { ...defaults, ...state.values }
+  const err = state.fieldErrors ?? {}
+  const num = (name: string, label: string) => (
+    <Field label={label} error={err[name]}>
+      <input name={name} inputMode="numeric" required defaultValue={v[name]} className={`${inputClass} w-28`} />
+    </Field>
+  )
+  return (
+    <form action={formAction} className="max-w-2xl space-y-6">
+      <fieldset className={box}>
+        <legend className="px-1 font-semibold">Montants des paliers (dollars)</legend>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {TIER_KEYS.map((tier) => (
+            <Field key={tier} label={TIER_LABELS[tier]} error={err[`tier_${tier}`]}>
+              <input name={`tier_${tier}`} inputMode="decimal" required defaultValue={v[`tier_${tier}`]} className={inputClass} />
+            </Field>
+          ))}
+        </div>
+      </fieldset>
+      <fieldset className={box}>
+        <legend className="px-1 font-semibold">Niveaux</legend>
+        {err.levels && <p role="alert" className="mb-2 text-sm text-red-700">{err.levels}</p>}
+        <div className="space-y-3">
+          {LEVEL_NAMES.map((name, i) => (
+            <div key={name} className="grid grid-cols-[6rem_1fr_1fr] items-end gap-4">
+              <p className="pb-2 text-sm font-medium">{LEVEL_LABELS[name]}</p>
+              {num(`level_${i}_minValidated`, 'À partir de (visites validées)')}
+              {num(`level_${i}_bonusPct`, 'Bonus (%)')}
+            </div>
+          ))}
+        </div>
+      </fieldset>
+      <fieldset className={box}>
+        <legend className="px-1 font-semibold">Diffusion</legend>
+        {num('widenRadiusMiles', 'Rayon du bouton « Élargir » (miles)')}
+      </fieldset>
+      {state.error && <p role="alert" className="text-sm text-red-700">{state.error}</p>}
+      {state.ok && <p role="status" className="text-sm text-emerald-700">{state.ok}</p>}
+      <SubmitButton>Enregistrer</SubmitButton>
+    </form>
+  )
+}
+```
+
+`app/admin/(app)/settings/page.tsx` :
+
+```tsx
+import { PageHeader } from '@/app/admin/_components/ui'
+import { requireAdmin } from '@/lib/session'
+import { getSettings } from '@/modules/settings'
+import { SettingsForm } from './settings-form'
+import { settingsToFormDefaults } from './settings-form-data'
+
+export default async function SettingsPage() {
+  await requireAdmin(['ADMIN'])
+  const settings = await getSettings()
+  return (
+    <>
+      <PageHeader title="Réglages" />
+      <p className="-mt-4 mb-6 max-w-2xl text-sm text-gray-600">
+        Montants versés aux agents (saisis en dollars, enregistrés en cents), bonus de niveau et rayon du bouton « Élargir ». Chaque enregistrement est tracé dans le journal.
+      </p>
+      <SettingsForm defaults={settingsToFormDefaults(settings)} />
+    </>
+  )
+}
+```
+
+- [ ] **Step 6: Vérification manuelle des réglages**
+
+Run: `npm run dev`, connecté en ADMIN :
+- `/admin/settings` : Visite 40.00, Fiche en ligne 25.00, Client signé 50.00, Visite de retour 20.00 ; Bronze 0 / 0, Silver 5 / 10, Gold 15 / 20 ; rayon 50.
+- Visite `abc` → « Montant invalide… » sous le champ, saisie conservée ; Gold bonus `150` → « Doit être au plus 100 » ; les trois seuils à `1` → « Un niveau doit commencer à 0 mission ».
+- Visite `45`, rayon `60` → message vert ; recharger : 45.00 et 60 ; `/admin/missions` propose « Élargir à 60 miles » ; `psql agents_terrain -c "SELECT action, actor FROM \"AuditLog\" WHERE action = 'settings.update'"` → une ligne avec votre email. Remettre 40 et 50.
+- `npm run admin:add -- marvin@allo-chantiers.fr SETTER`, recharger `/admin/settings` → renvoyé vers `/admin/login` avec « Accès refusé… » ; « Réglages » n'est plus dans la barre latérale. Remettre `ADMIN`.
+
+- [ ] **Step 7: Vérification d'ensemble**
+
+Run: `npm test && npx tsc --noEmit && npm run lint && npm run build`
+Expected: toute la suite au vert, aucune erreur de typage ni de lint, build Next réussi (toutes les pages `/admin/*` dynamiques, marquées `ƒ`).
+
+Parcours complet, `npm run dev` : nouveau pro par le formulaire (« Fenway Fence Co », `(617) 555-0170`, `4 Jersey Street`, `Boston`, `MA`, `02215`, `Fence contractor`) → « Le pro est d’accord » → mission publiée pour dans 3 jours → coller la ligne « Session agent (Maya) » de `npm run seed:dev`, accepter la mission depuis l'espace agent (le SMS de confirmation au pro s'affiche dans le terminal) → revenir en admin (ligne « Session admin ») : la mission est « Acceptée » avec Maya sur la fiche du pro et dans la liste des missions, et le journal du pro montre « Mission publiée » puis « Mission acceptée ».
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add "app/admin/(app)/settings"
+git commit -m "feat(admin): settings page (tier amounts, levels, widen radius) for admins"
+```
+
+## Chunk 22: Déploiement et runbook
 
 Ce chunk prépare la mise en production sans la lancer : le déploiement réel demande le nom de domaine, les comptes (Google OAuth, Twilio, R2) et l'accord explicite de Marvin (spec §14). Rappel de la règle maison : on déploie **uniquement via GitHub** (push → `git pull` sur le VPS → `docker compose`), jamais par copie directe de fichiers.
 
-### Task 65: Image Docker et démarrage
+### Task 77: Image Docker et démarrage
 
 **Files:**
 - Create: `Dockerfile`, `.dockerignore`, `scripts/docker-entrypoint.sh`
@@ -12334,7 +15276,7 @@ CMD ["./scripts/docker-entrypoint.sh"]
 - [ ] **Step 4: Vérifier que le build de production passe en local**
 
 Run: `npm run build`
-Expected: « Compiled successfully », sans erreur de typage ni de lint bloquante. Docker n'est pas installé sur le poste de développement : l'image se construit sur le VPS (Task 67).
+Expected: « Compiled successfully », sans erreur de typage ni de lint bloquante. Docker n'est pas installé sur le poste de développement : l'image se construit sur le VPS (Task 79).
 
 - [ ] **Step 5: Commit**
 
@@ -12343,7 +15285,7 @@ git add Dockerfile .dockerignore scripts/docker-entrypoint.sh
 git commit -m "chore(deploy): production Docker image with migrate-on-start"
 ```
 
-### Task 66: Composition (app + Postgres) derrière Traefik
+### Task 78: Composition (app + Postgres) derrière Traefik
 
 **Files:**
 - Create: `docker-compose.yml`, `secrets.env.example`
@@ -12436,7 +15378,7 @@ git add docker-compose.yml secrets.env.example
 git commit -m "chore(deploy): compose with Postgres behind Traefik"
 ```
 
-### Task 67: Runbook de mise en ligne (`docs/runbook.md`)
+### Task 79: Runbook de mise en ligne (`docs/runbook.md`)
 
 **Files:**
 - Create: `docs/runbook.md`
