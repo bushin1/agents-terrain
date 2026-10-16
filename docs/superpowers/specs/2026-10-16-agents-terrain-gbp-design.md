@@ -1,7 +1,7 @@
 # Agents terrain GBP — Design
 
 - **Date :** 2026-10-16
-- **Statut :** design validé par Marvin (blocs 1, 2 et 3), révisé après relecture (v2)
+- **Statut :** design validé par Marvin (blocs 1, 2 et 3), révisé après deux relectures (v3)
 - **Projet :** nouvelle app autonome (ce repo). Aucune modification de gmb-tracker en V1.
 
 ## 1. Objectif
@@ -76,7 +76,7 @@ Un agent a au maximum 3 missions `ACCEPTED` en même temps.
 |---|---|---|---|
 | 1 | Check-in | Oui | lat/lng + précision + horodatage (géoloc du navigateur) |
 | 2 | Accord du pro | Oui | signature (image), nom du signataire, version du texte, horodatage |
-| 3 | Création de la fiche depuis le compte Google du pro | Oui | nom exact de la fiche, catégorie utilisée, ville, code postal |
+| 3 | Création de la fiche depuis le compte Google du pro, ou revendication de sa fiche publique existante si la mission l'indique | Oui | nom exact de la fiche, catégorie utilisée, ville, code postal, `CREATED` ou `CLAIMED` |
 | 4 | Invitation de l'email gestionnaire dédié (affiché à l'écran) | Oui (un choix) | `INVITE_SENT` ou `INVITE_NOT_ALLOWED_YET` (Google ne propose pas encore l'ajout d'utilisateurs) |
 | 5 | Photos | Oui, 10 minimum | fichiers + EXIF (date, GPS si présent) + catégorie (logo, véhicule, équipe, matériel, chantier) |
 | 6 | Vérification | Oui (un choix) | `VIDEO_DONE` / `VIDEO_NOT_OFFERED` / `OTHER_METHOD_STARTED` (+ méthode) |
@@ -95,7 +95,7 @@ Chaque mission affiche ses 3 paliers avec leur état (à venir / gagné / payé)
 
 Accès par compte `AdminUser` (email + mot de passe + TOTP). Deux rôles : `ADMIN` (tout) et `SETTER` (pros et missions uniquement).
 
-1. **Pros** : liste avec filtres (statut, ville, métier) ; fiche pro avec notes d'appel ; import CSV (nom, contact, téléphone, adresse, métier). Statuts en section 7.3.
+1. **Pros** : liste avec filtres (statut, ville, métier) ; fiche pro avec notes d'appel ; import CSV (nom, contact, téléphone, adresse, métier). Statuts en section 7.3. Lors de la pré-qualification, le setter vérifie sur Maps si le pro a déjà une fiche publique et l'enregistre (`existingPlaceId`) ; la mission demande alors de la revendiquer plutôt que d'en créer une.
 2. **Missions** : création depuis un pro `AGREED` (créneau, catégorie suggérée, consignes) ; `publishedAt` = création.
    - Encart **Non prises** : missions `OPEN` publiées depuis plus de 48 h. Actions : élargir le rayon de diffusion (`broadcastRadiusMiles`), ajouter un bonus urgence (`urgencyBonusCents`).
    - Encart **À replanifier** : missions `OPEN` dont le créneau est passé (invisibles pour les agents). Actions : nouveau créneau (reste `OPEN`) ou annulation.
@@ -105,7 +105,7 @@ Accès par compte `AdminUser` (email + mot de passe + TOTP). Deux rôles : `ADMI
    - **Demander une correction** : → `NEEDS_FIX`, message obligatoire.
    - **Rejeter** : → `REJECTED`, motif obligatoire.
 4. **Fiches à confirmer** : propositions de la tâche de détection (section 9.4) pour les pros dont on n'a pas encore l'accès gestionnaire. L'admin ouvre le lien Maps proposé et clique **Confirmer en ligne** ou **Ce n'est pas la bonne fiche**.
-5. **Conversion** : sur un pro `LISTING_LIVE`, bouton **Convertir en client**. L'admin saisit l'identifiant du client Stripe de facturation (`cus_…`) créé par le process commercial actuel ; l'app vérifie qu'il existe (section 9.5). Exige que l'accès gestionnaire soit obtenu.
+5. **Conversion** : sur un pro `LISTING_LIVE`, bouton **Convertir en client**. L'admin choisit le compte Stripe de facturation (liste configurée) et saisit l'identifiant du client (`cus_…`) créé par le process commercial actuel ; l'app vérifie qu'il existe dans ce compte (section 9.5). Exige que l'accès gestionnaire soit obtenu.
 6. **Agents** : liste et fiche agent (statut, niveau, missions par statut, taux de validation, note moyenne des pros, alertes). Actions : suspendre / réactiver, débloquer un agent `LOCKED` ou refuser sa candidature.
 7. **SMS reçus** : réponses des pros qui ne sont ni une note ni « NO » (annulation, question…), à traiter à la main.
 8. **Paiements** : gains `PAYABLE` regroupés par agent, bouton « Lancer les virements » (section 8.4), `Payout` en attente ou en échec avec bouton « Réessayer », historique, export CSV.
@@ -126,7 +126,7 @@ Tous les changements de statut faits par un admin sont journalisés (`AuditLog` 
 | `RETURN_VISIT` | la mission `RETURN_VISIT` | Admin valide la mission de retour | $20 |
 | `URGENCY` | la mission concernée | Mission validée avec un `urgencyBonusCents` > 0 | montant fixé par l'admin |
 
-Les paliers `LIVE` et `CLIENT` reviennent toujours à l'agent de la mission `VISIT` d'origine, même si une mission de retour a été faite par un autre agent.
+Les paliers `LIVE` et `CLIENT` reviennent toujours à l'agent de la mission `VISIT` d'origine, même si une mission de retour a été faite par un autre agent. La **mission `VISIT` d'origine** d'un pro est sa seule mission `VISIT` `VALIDATED` : un pro `VISITED` ne revient jamais en `AGREED`, il ne peut donc pas en avoir une seconde.
 
 ### 6.2 Niveaux
 Le niveau dépend du nombre de missions `VALIDATED` de l'agent **au moment où le gain est créé** :
@@ -151,7 +151,7 @@ Le bonus s'applique à tous les paliers sauf `URGENCY`. Il est calculé et **fig
 ### 7.1 Agent
 - `APPLICANT` → (mobile vérifié) `TRAINING` → (quiz ≥ 80 %) `CERTIFIED` → (contrat + Stripe `payouts_enabled`) `ACTIVE`
 - `TRAINING` → (3 échecs) `LOCKED` → (admin) `TRAINING` (essais remis à zéro) ou `REFUSED`
-- `ACTIVE` ↔ `SUSPENDED` (admin). Un agent `SUSPENDED` ne voit plus de missions ; ses missions `ACCEPTED` repassent `OPEN` ; ses gains `PAYABLE` restent payables sauf annulation par un admin.
+- `ACTIVE` ↔ `SUSPENDED` (admin). Un agent `SUSPENDED` ne voit plus de missions ; ses missions `ACCEPTED` repassent `OPEN` ; ses gains `PAYABLE` restent payables et sont inclus dans les virements (8.4), sauf annulation par un admin.
 
 ### 7.2 Mission
 Types : `VISIT` (par défaut) et `RETURN_VISIT` (aider le pro à finir la vérification ; checklist réduite aux étapes 1, 4, 6 et 7 ; porte `parentMissionId` = la mission `VISIT` d'origine).
@@ -168,16 +168,19 @@ Types : `VISIT` (par défaut) et `RETURN_VISIT` (aider le pro à finir la vérif
 | Statut | Entrée |
 |---|---|
 | `TO_CALL` | Création ou import |
-| `AGREED` | Le setter note l'accord et un créneau ; ou retour après une mission `REJECTED` / `CANCELLED` |
+| `AGREED` | Le setter note l'accord et un créneau ; ou retour après une mission **`VISIT`** `REJECTED` / `CANCELLED` |
 | `MISSION_OPEN` | Une mission `VISIT` est créée pour ce pro (y compris quand la mission repasse `OPEN`) |
 | `VISITED` | La mission `VISIT` passe `VALIDATED` |
 | `LISTING_LIVE` | La fiche est détectée ou confirmée en ligne (section 9.4) |
 | `CLIENT` | Le palier `CLIENT` est déclenché |
 | `LOST` | Admin, depuis n'importe quel statut, motif obligatoire |
 
-Après une mission `REJECTED` ou `CANCELLED`, le pro repasse `AGREED` par défaut, ou `LOST` si l'admin le choisit au même moment.
+Après une mission `VISIT` `REJECTED` ou `CANCELLED`, le pro repasse `AGREED` par défaut, ou `LOST` si l'admin le choisit au même moment. Une mission `RETURN_VISIT` ne change jamais le statut du pro (cf. ci-dessous pour son effet sur le suivi de la fiche). Passer un pro `LOST` annule ses missions `OPEN`, `ACCEPTED` et `NEEDS_FIX`.
 
-Suivi de la fiche (`Pro.listingStatus`, à partir de `VISITED`) : `PENDING_VERIFICATION` → `LIVE` | `VERIFICATION_FAILED`. Passage à `VERIFICATION_FAILED` : automatique 60 jours après la validation de la visite, ou par un admin à tout moment. Depuis `VERIFICATION_FAILED`, l'admin peut créer une mission `RETURN_VISIT` (le statut repasse alors `PENDING_VERIFICATION`, et le délai de 60 jours n'est pas prolongé pour le palier `LIVE`) ou passer le pro `LOST`.
+Suivi de la fiche (`Pro.listingStatus`, à partir de `VISITED`) : `PENDING_VERIFICATION` → `LIVE` | `VERIFICATION_FAILED`.
+- **Échéance de suivi** `Pro.listingDeadlineAt` : posée à `validatedAt` de la visite + 60 jours. Une tâche quotidienne passe en `VERIFICATION_FAILED` les pros `PENDING_VERIFICATION` dont l'échéance est dépassée. Un admin peut aussi le faire à tout moment.
+- **Mission de retour** : depuis `VERIFICATION_FAILED`, l'admin peut créer une `RETURN_VISIT`. À sa création : `listingStatus` → `PENDING_VERIFICATION` et `listingDeadlineAt` → créneau de la mission + 60 jours. Si elle finit `REJECTED` ou `CANCELLED` : `listingStatus` → `VERIFICATION_FAILED` immédiatement.
+- L'échéance de suivi ne touche pas le délai du palier `LIVE`, qui reste compté depuis la visite d'origine (6.3). Une fiche mise en ligne après ce délai fait passer le pro `LISTING_LIVE` (il reste convertible en client) sans créer de gain `LIVE`.
 
 ### 7.4 Gain (`Earning`)
 Créé directement en `PAYABLE` → `PAID` (inclus dans un `Payout` réussi). `PAYABLE` → `VOID` (admin, motif). Un gain rattaché à un `Payout` `PENDING` n'est pas annulable et ne peut pas entrer dans un autre `Payout`.
@@ -197,13 +200,17 @@ L'app crée le compte connecté et redirige vers le lien d'onboarding Stripe. Le
 Contrat d'agent indépendant en click-wrap (version + horodatage + IP). Il prévoit : statut de freelance, aucun quota ni horaire imposé, interdiction de se présenter comme Google, interdiction de toute action liée aux avis, interdiction de manipuler les mots de passe des pros.
 
 ### 8.4 Virements
-Le vendredi, un admin clique sur « Lancer les virements ». Le lot :
-1. **Reprend d'abord chaque `Payout` `PENDING`** existant (lot précédent interrompu) : nouvel appel `stripe.transfers.create` avec **sa** clé d'idempotence (`payout.id`). Stripe renvoie le virement déjà créé s'il existe.
-2. Puis, pour chaque agent `ACTIVE` avec `stripePayoutsEnabled` et des gains `PAYABLE` non rattachés : crée un `Payout` `PENDING`, y rattache ses gains, appelle `stripe.transfers.create` avec la clé = `payout.id`.
-3. Résultat de chaque appel :
+Le vendredi, un admin clique sur « Lancer les virements ».
+
+Chaque transfert Stripe est créé avec `transfer_group = payout.id`, `metadata.payoutId = payout.id` et la clé d'idempotence `payout.id`. La clé ne protège que pendant 24 h (Stripe peut l'effacer ensuite) ; le `transfer_group` sert de garde durable.
+
+Le lot :
+1. **Reprend d'abord chaque `Payout` `PENDING`** existant (lot précédent interrompu, ou bouton « Réessayer ») : `stripe.transfers.list({ transfer_group: payout.id })`. Un transfert existe → `Payout` `PAID` avec cet identifiant, gains `PAID`. Aucun transfert → nouvel appel `stripe.transfers.create` avec les mêmes paramètres.
+2. Puis, pour chaque agent `ACTIVE` ou `SUSPENDED` avec `stripePayoutsEnabled` et des gains `PAYABLE` non rattachés : crée un `Payout` `PENDING`, y rattache ses gains, appelle `stripe.transfers.create`.
+3. Résultat de chaque appel de création :
    - succès → `Payout` `PAID` (avec `stripeTransferId`), gains `PAID` ;
    - erreur définitive de Stripe (requête refusée, compte non payable) → `Payout` `FAILED` avec l'erreur, gains détachés et de nouveau `PAYABLE`, alerte dans le back-office ;
-   - délai dépassé, erreur réseau ou erreur 5xx → le `Payout` reste `PENDING` ; il sera repris avec la même clé (bouton « Réessayer » ou lot suivant).
+   - délai dépassé, erreur réseau ou erreur 5xx → le `Payout` reste `PENDING` ; il sera repris par le point 1 (bouton « Réessayer » ou lot suivant).
 
 Un gain n'est jamais rattaché à deux `Payout` non finaux à la fois. Pas de virement automatique en V1.
 
@@ -219,12 +226,12 @@ Chaque module a un dossier `modules/<nom>/` qui expose une interface publique (`
 |---|---|---|---|
 | `recruitment` | Landing, candidature, contrôle d'âge | `apply(input)` | `sms`, géocodage |
 | `academy` | Modules, quiz, certification | `submitAttempt(agentId, answers)`, `getProgress(agentId)`, `unlock(agentId, adminId)` | — |
-| `missions` | Pros, missions, dispatch, checklist, états | `listOpenMissionsFor(agentId)`, `accept(missionId, agentId)`, `saveStep(missionId, step, data)`, `submit(missionId)`, `transition(missionId, to, actor, reason?)`, `runNoShowSweep()` | `sms` |
+| `missions` | Pros, missions, dispatch, checklist, états du pro et de la mission | `listOpenMissionsFor(agentId)`, `accept(missionId, agentId)`, `saveStep(missionId, step, data)`, `submit(missionId)`, `transition(missionId, to, actor, reason?)`, `setProStatus(proId, to, actor, reason?)`, `setListingStatus(proId, to, data?)`, `runNoShowSweep()`, `runNeedsFixSweep()`, `runListingDeadlineSweep()` | `sms` |
 | `review` | File de validation, alertes fraude | `listQueue()`, `validate(missionId, adminId)`, `requestFix(...)`, `reject(...)`, `computeFlags(missionId)` | `missions`, `ledger` |
 | `ledger` | Seul point de création et d'annulation des gains | `award(missionId, tier)`, `voidEarning(id, reason, adminId)`, `balanceOf(agentId)` | réglages |
 | `payouts` | Stripe Connect, virements | `startOnboarding(agentId)`, `runPayoutBatch(adminId)`, `retryPayout(payoutId)`, `handleConnectWebhook(event)` | Stripe (compte LLC US), `ledger` |
-| `listing` | Accès gestionnaire et détection « fiche en ligne » | `matchInvitations()`, `checkVerification()`, `detectPublicListings()`, `confirmLive(proId, placeId, adminId)` | API Google Business Profile (compte dédié), API Places |
-| `billing` | Lecture seule du compte Stripe de facturation des clients | `customerExists(cusId)`, `getFirstPaidAt(cusId)` | Stripe (clé restreinte en lecture) |
+| `listing` | Accès gestionnaire et détection « fiche en ligne » | `matchInvitations()`, `checkVerification()`, `detectPublicListings()`, `confirmLive(proId, placeId, adminId)` | API Google Business Profile (compte dédié), API Places, `missions`, `ledger` |
+| `billing` | Lecture seule des comptes Stripe de facturation des clients, conversion, palier `CLIENT` | `listAccounts()`, `customerExists(account, cusId)`, `convert(proId, account, cusId, adminId)`, `runFirstPaymentSweep()` | Stripe (clés restreintes en lecture), `missions`, `ledger` |
 | `sms` | Envoi et réception de SMS | `send(to, template, vars)`, `handleInbound(from, body)` | Twilio |
 
 `ledger.award` est le **seul** point d'entrée qui crée un gain. Il applique les règles de la section 6 (montant, bonus de niveau, unicité, rattachement à la mission d'origine, délais) ; les déclencheurs ne calculent jamais de montant.
@@ -234,7 +241,7 @@ Chaque module a un dossier `modules/<nom>/` qui expose une interface publique (`
 ### 9.3 Données (Prisma, résumé)
 - `Agent` : identité, date de naissance, mobile vérifié, ZIP, lat/lng, rayon, véhicule, disponibilités, `status`, `failedAttempts`, `stripeAccountId`, `stripePayoutsEnabled`, `contractVersion`, `contractSignedAt`, `contractIp`
 - `TrainingAttempt` : agentId, score, réponses, date
-- `Pro` : nom de l'entreprise, contact, téléphone, adresse, ville, code postal, lat/lng, métier, `status`, notes, `listingStatus?`, `googleLocationName?` (accès gestionnaire obtenu), `placeId?`, `mapsUrl?`, `liveAt?`, `stripeCustomerId?`, `convertedAt?`, `lostReason?`
+- `Pro` : nom de l'entreprise, contact, téléphone, adresse, ville, code postal, lat/lng, métier, `status`, notes, `existingPlaceId?` (fiche publique déjà existante avant la visite), `listingStatus?`, `listingDeadlineAt?`, `googleLocationName?` (accès gestionnaire obtenu), `placeId?`, `mapsUrl?`, `liveAt?`, `billingAccount?`, `stripeCustomerId?`, `convertedAt?`, `lostReason?`
 - `Mission` : proId, agentId?, `type`, `parentMissionId?`, `status`, `slotAt`, `publishedAt`, `broadcastRadiusMiles?`, `urgencyBonusCents`, catégorie suggérée, consignes, `validatedAt?`, `needsFixAt?`, `proRating?`, `proDenied`
 - `Submission` : missionId, check-in (lat, lng, précision, horodatage téléphone, `receivedAt`), signature (clé R2, nom, version du texte, horodatages), données de chaque étape avec horodatages, choix d'invitation, choix de vérification, check-out
 - `Photo` : submissionId, clé R2, catégorie, EXIF (date, lat/lng), `receivedAt`
@@ -253,17 +260,19 @@ Montants en cents (entiers).
 - **Compte dédié** : un compte Google réservé aux fiches créées par les agents, distinct du compte `GoogleConnection` de gmb-tracker. Son email est affiché à l'étape 4. L'app garde son propre jeton OAuth (scope `business.manage`), avec une connexion unique faite par un admin.
 - **`matchInvitations`** (toutes les heures) : liste les invitations en attente du compte dédié (API Account Management, `accounts.invitations.list`). Pour chaque pro `VISITED` ou `LISTING_LIVE` sans `googleLocationName`, cherche l'invitation dont la fiche cible correspond (nom normalisé + code postal), l'accepte et enregistre `googleLocationName`. Plusieurs candidates : aucune n'est acceptée, l'admin choisit dans la fiche pro.
 - **`checkVerification`** (toutes les heures) : pour les pros avec `googleLocationName` et `listingStatus = PENDING_VERIFICATION`, lit l'état de vérification. Fiche vérifiée → `LIVE`.
-- **`detectPublicListings`** (toutes les 6 heures) : pour les pros `PENDING_VERIFICATION` sans `googleLocationName`, fait une recherche Places (nom de la fiche + ville). Un résultat dont le nom normalisé et le code postal correspondent devient un `ListingCandidate` `PROPOSED` (un seul par placeId). L'admin le confirme dans « Fiches à confirmer » (`confirmLive`) → `LIVE`.
+- **`detectPublicListings`** (toutes les 6 heures) : pour les pros `PENDING_VERIFICATION` sans `googleLocationName` **et sans `existingPlaceId`**, fait une recherche Places (nom de la fiche + ville). Un résultat devient un `ListingCandidate` `PROPOSED` (un seul par placeId) si son nom normalisé correspond **et** si son code postal **ou** son numéro de téléphone correspond à ceux du pro (les fiches à zone desservie n'exposent pas d'adresse). L'admin le confirme dans « Fiches à confirmer » (`confirmLive`) → `LIVE`.
+- **Pro qui avait déjà une fiche publique** (`existingPlaceId`) : Places ne distingue pas une fiche revendiquée d'une fiche qui ne l'est pas, donc pas de détection publique. Son passage à `LIVE` passe uniquement par l'accès gestionnaire et `checkVerification` ; c'est pourquoi le SMS d'instructions d'invitation (ci-dessous) lui est envoyé dès que la visite est validée sans `googleLocationName`, avec un rappel à J+3 et J+10.
 - **Passage à `LIVE`** (par l'un ou l'autre chemin) : `Pro.listingStatus = LIVE`, `liveAt`, `placeId`/`mapsUrl` quand ils sont connus, pro → `LISTING_LIVE`, `ledger.award(missionVisitId, 'LIVE')`.
 - **Accès gestionnaire manquant une fois la fiche en ligne** : si le pro est `LISTING_LIVE` sans `googleLocationName`, un SMS lui est envoyé avec les 3 étapes pour inviter l'email gestionnaire, puis un rappel à J+3. La conversion en client exige l'accès gestionnaire.
 - **Jeton Google expiré ou révoqué** : les tâches s'arrêtent sans rien modifier et une alerte apparaît dans le back-office.
 
 ### 9.5 Conversion et palier `CLIENT` (module `billing`)
-Le lien entre un client et Stripe vit dans le système commercial actuel (base leadgen, `core.site.stripe_customer_id`), pas dans gmb-tracker. La nouvelle app ne s'y branche pas : elle lit directement le compte Stripe qui facture les clients, avec une clé **restreinte en lecture seule** (clients et factures).
+Le lien entre un client et Stripe vit dans le système commercial actuel (base leadgen, `core.site.stripe_customer_id`), pas dans gmb-tracker. Ce système utilise plusieurs comptes Stripe (`core.stripe_client.compte`, par exemple `WLS`). La nouvelle app ne s'y branche pas : elle lit directement les comptes Stripe qui facturent les clients.
 
-- **Convertir en client** (admin, cf. 5.5) : saisie du `cus_…` → `billing.customerExists` le vérifie → `Pro.stripeCustomerId`, `convertedAt`. Le client est créé et facturé par le process commercial habituel ; la nouvelle app n'écrit rien ailleurs.
-- **`getFirstPaidAt(cusId)`** : date de la plus ancienne facture `paid` du client avec `amount_paid > 0` (les factures à 0 $, d'essai ou avec un coupon de 100 %, ne comptent pas).
-- **Tâche horaire** : pour les pros convertis dont la visite d'origine a été validée il y a moins de 90 jours et sans palier `CLIENT`, appelle `getFirstPaidAt`. Date présente → `ledger.award(missionVisitId, 'CLIENT')`, pro → `CLIENT`.
+- **Comptes configurés** : une liste `code de compte → clé restreinte en lecture seule` (clients et factures), dans les variables d'environnement. Les codes reprennent ceux de la base leadgen.
+- **Convertir en client** (`billing.convert`, admin, cf. 5.5) : choix du compte + saisie du `cus_…` → `customerExists(account, cusId)` le vérifie → `Pro.billingAccount`, `Pro.stripeCustomerId`, `convertedAt` = maintenant. Le client est créé et facturé par le process commercial habituel ; la nouvelle app n'écrit rien ailleurs.
+- **Premier paiement** : la plus ancienne facture du client, dans ce compte, avec le statut `paid`, `amount_paid > 0` et une date de paiement (`status_transitions.paid_at`) **postérieure ou égale à `convertedAt`**. Les factures à 0 $ (essai, coupon de 100 %) et celles d'un abonnement antérieur ne comptent pas.
+- **`runFirstPaymentSweep`** (toutes les heures) : pour les pros convertis sans palier `CLIENT` dont la visite d'origine a été validée il y a moins de 90 jours, cherche ce premier paiement. Trouvé → `ledger.award(missionVisitId, 'CLIENT')`, pro → `CLIENT`.
 
 Les fiches de ces clients sont ajoutées au suivi de gmb-tracker par le process habituel de l'équipe. Les signaux de l'API GBP (photos, posts) n'y remontent pas, car le compte gestionnaire est différent ; c'est accepté en V1.
 
@@ -304,14 +313,15 @@ Un `PRO_DENIED` ou un `LOW_PRO_RATING` impose une confirmation explicite avant �
 
 - **Unitaires** (`vitest`, comme gmb-tracker) :
   - `ledger` : montants par palier, bonus de niveau aux seuils (4/5, 14/15), `URGENCY` sans bonus, unicité `(missionId, tier)`, gain figé après changement de réglage, `LIVE`/`CLIENT` refusés sans `VISIT` validé, refusés après 60/90 jours, rattachés à la mission d'origine quand une mission de retour existe ;
-  - machines d'état de l'agent, de la mission et du pro (transitions permises et refusées, `NEEDS_FIX` → `REJECTED` à 7 jours, retour du pro en `AGREED`) ;
+  - machines d'état de l'agent, de la mission et du pro (transitions permises et refusées, `NEEDS_FIX` → `REJECTED` à 7 jours, retour du pro en `AGREED` seulement après une mission `VISIT`, pro `LOST` qui annule ses missions en cours) ;
+  - suivi de la fiche : échéance à 60 jours, remise à zéro par une mission de retour, retour en `VERIFICATION_FAILED` si elle est rejetée, fiche en ligne après le délai du palier `LIVE` (pro `LISTING_LIVE`, aucun gain) ;
   - dispatch : rayon de l'agent, rayon de diffusion, créneau passé masqué ;
   - absence : SMS à +2 h, remise en `OPEN` à +24 h, check-in tardif refusé ;
   - chaque règle anti-fraude ;
-  - rapprochement d'invitation et de fiche Places (nom normalisé, cas à plusieurs candidates) ;
+  - rapprochement d'invitation et de fiche Places (nom normalisé, correspondance par code postal ou par téléphone, fiche à zone desservie sans adresse, pro avec `existingPlaceId` exclu, cas à plusieurs candidates) ;
   - `sms.handleInbound` (1–5, NO, autre texte, pas de SMS en attente).
-- **Paiements** : `runPayoutBatch` avec un faux client Stripe : succès, erreur définitive, délai dépassé puis reprise avec la même clé, lot relancé sans double paiement.
-- **Facturation** : `getFirstPaidAt` ignore les factures à 0 $ et prend la plus ancienne payée.
+- **Paiements** : `runPayoutBatch` avec un faux client Stripe : succès, erreur définitive, délai dépassé puis reprise (transfert déjà créé retrouvé par `transfer_group` → aucun second transfert ; aucun transfert → recréation), agent `SUSPENDED` payé, lot relancé sans double paiement.
+- **Facturation** : le premier paiement ignore les factures à 0 $ et celles payées avant `convertedAt`, cherche dans le bon compte, et prend la plus ancienne restante.
 - **Bout en bout** (Playwright) : candidature → certification → acceptation → checklist complète avec GPS et caméra simulés → validation admin → gain visible côté agent. Avec des données réalistes : noms d'entreprises longs, vraies adresses US, 15 photos.
 
 ## 13. Périmètre et découpage
@@ -332,7 +342,7 @@ Elles ne changent pas le design : ce sont des comptes, des contenus ou des valeu
 - Fournisseur d'emails et sa clé (Resend par défaut).
 - Twilio : enregistrement A2P 10DLC (obligatoire pour envoyer des SMS aux US) et numéro dédié.
 - Compte Google gestionnaire dédié (à créer) et client OAuth avec accès à l'API Business Profile (le projet GCP de gmb-tracker y a déjà accès) ; clé API Places.
-- Compte Stripe de la LLC US (Connect activé) et clé restreinte en lecture sur le compte Stripe qui facture les clients.
+- Compte Stripe de la LLC US (Connect activé) et clé restreinte en lecture sur chaque compte Stripe de facturation des clients (codes de la base leadgen, par exemple `WLS`).
 - Relecture du contrat d'agent par un avocat US (point d'attention : Californie, loi AB5).
 - Montants définitifs des paliers (les défauts de la section 6.1 sont réglables).
 - Les vidéos des 5 modules de formation (qui les tourne).
