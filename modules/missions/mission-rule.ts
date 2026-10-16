@@ -1,4 +1,4 @@
-import type { MissionStatus } from '@prisma/client'
+import type { MissionStatus, MissionType } from '@prisma/client'
 
 const H = 3_600_000
 
@@ -11,6 +11,20 @@ export const MISSION_TRANSITIONS: Record<MissionStatus, readonly MissionStatus[]
   VALIDATED: [],
   REJECTED: [],
   CANCELLED: [],
+}
+
+export const QUICK_TASK_TRANSITIONS: Record<MissionStatus, readonly MissionStatus[]> = {
+  OPEN: ['ACCEPTED', 'CANCELLED'],
+  ACCEPTED: ['SUBMITTED', 'CANCELLED'],
+  SUBMITTED: ['VALIDATED', 'REJECTED'],
+  NEEDS_FIX: [],
+  VALIDATED: [],
+  REJECTED: [],
+  CANCELLED: [],
+}
+
+export function transitionsFor(type: MissionType): Record<MissionStatus, readonly MissionStatus[]> {
+  return type === 'QUICK_TASK' ? QUICK_TASK_TRANSITIONS : MISSION_TRANSITIONS
 }
 
 export function canTransitionMission(from: MissionStatus, to: MissionStatus): boolean {

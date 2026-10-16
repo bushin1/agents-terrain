@@ -36,6 +36,8 @@ export function applicationSchema(now: Date) {
     availability: z
       .array(z.string().refine((s) => AVAILABILITY_SLOTS.includes(s), 'Unknown time slot'))
       .min(1, 'Pick at least one time slot'),
+    occupation: z.string().trim().min(2, 'Tell us what you do').max(100),
+    howDidYouHear: z.string().trim().min(2, 'Tell us how you found us').max(200),
     confirm18: z.literal('on', { message: 'Confirm you are 18 or older' }),
   })
 }

@@ -19,6 +19,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { href: '/admin/pros', label: 'Pros' },
     { href: '/admin/missions', label: 'Missions' },
     { href: '/admin/review', label: 'Validation' },
+    { href: '/admin/targets', label: 'Review Targets' },
+    { href: '/admin/quick-tasks', label: 'Quick Tasks' },
     { href: '/admin/agents', label: 'Agents' },
     { href: '/admin/sms', label: 'SMS reçus' },
     ...(admin.role === 'ADMIN' ? [{ href: '/admin/settings', label: 'Réglages' }] : []),

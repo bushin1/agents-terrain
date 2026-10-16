@@ -42,6 +42,7 @@ export async function apply(input: Record<string, unknown>, now: Date = new Date
       data: {
         firstName: a.firstName, lastName: a.lastName, email: a.email, phone: a.phone, birthDate: a.birthDate,
         zip: a.zip, lat: geo.lat, lng: geo.lng, radiusMiles: a.radiusMiles, hasCar: a.hasCar, availability: a.availability,
+        profileAnswers: { occupation: a.occupation, howDidYouHear: a.howDidYouHear },
       },
     })
     agentId = agent.id

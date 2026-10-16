@@ -18,6 +18,13 @@ enum AgentStatus {
   SUSPENDED
 }
 
+enum AgentLevel {
+  STARTER
+  BRONZE
+  SILVER
+  GOLD
+}
+
 model Agent {
   id               String            @id @default(cuid())
   firstName        String
@@ -32,9 +39,13 @@ model Agent {
   hasCar           Boolean
   availability     String[] // créneaux « mon-am », « mon-pm », … « sun-pm »
   status           AgentStatus       @default(APPLICANT)
+  level            AgentLevel        @default(STARTER)
+  trustScore       Int               @default(0)
   phoneVerifiedAt  DateTime?
   failedAttempts   Int               @default(0)
   lastAttemptAt    DateTime?
+  selfieKey        String?
+  profileAnswers   Json?
   contractVersion  String?
   contractSignedAt DateTime?
   contractSignedName String? // nom légal tapé pour signer
@@ -45,8 +56,10 @@ model Agent {
   missions         Mission[]
   earnings         Earning[]
   flags            FraudFlag[]
+  taskResults      QuickTaskResult[]
 
   @@index([status])
+  @@index([level])
 }
 
 // Codes à usage unique envoyés par SMS (candidature et connexion). Seule l'empreinte est stockée.
@@ -116,6 +129,7 @@ model Pro {
 enum MissionType {
   VISIT
   RETURN_VISIT
+  QUICK_TASK
 }
 
 enum MissionStatus {
@@ -130,8 +144,8 @@ enum MissionStatus {
 
 model Mission {
   id                   String        @id @default(cuid())
-  proId                String
-  pro                  Pro           @relation(fields: [proId], references: [id])
+  proId                String?
+  pro                  Pro?          @relation(fields: [proId], references: [id])
   agentId              String?
   agent                Agent?        @relation(fields: [agentId], references: [id])
   type                 MissionType   @default(VISIT)
@@ -160,6 +174,7 @@ model Mission {
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
   submission           Submission?
+  taskResult           QuickTaskResult?
   earnings             Earning[]
   flags                FraudFlag[]
 
@@ -210,6 +225,7 @@ enum EarningTier {
   CLIENT
   RETURN_VISIT
   URGENCY
+  QUICK_TASK
 }
 
 enum EarningStatus {
@@ -247,6 +263,8 @@ enum FraudType {
   LOW_PRO_RATING
   NO_SHOW
   LATE_SYNC
+  REVIEW_REMOVED
+  REVIEW_SUSPICIOUS
 }
 
 model FraudFlag {
@@ -305,4 +323,64 @@ model Setting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+// ── Quick Tasks (phase 2) ──────────────────────────────────────────────────────
+
+enum TargetTier {
+  SACRIFICIAL
+  STANDARD
+  PREMIUM
+}
+
+model ReviewTarget {
+  id           String      @id @default(cuid())
+  placeId      String      @unique
+  name         String
+  city         String
+  state        String
+  trade        String
+  tier         TargetTier  @default(SACRIFICIAL)
+  active       Boolean     @default(true)
+  maxPerDay    Int         @default(1)
+  maxTotal     Int         @default(20)
+  reviewCount  Int         @default(0)
+  lastReviewAt DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  results      QuickTaskResult[]
+
+  @@index([active, tier])
+  @@index([state])
+}
+
+enum QuickTaskStatus {
+  ASSIGNED
+  SUBMITTED
+  VERIFIED
+  FAILED
+  EXPIRED
+}
+
+model QuickTaskResult {
+  id              String          @id @default(cuid())
+  missionId       String          @unique
+  mission         Mission         @relation(fields: [missionId], references: [id])
+  targetId        String
+  target          ReviewTarget    @relation(fields: [targetId], references: [id])
+  agentId         String
+  agent           Agent           @relation(fields: [agentId], references: [id])
+  status          QuickTaskStatus @default(ASSIGNED)
+  reviewText      String
+  screenshotKey   String?
+  verifiedAt      DateTime?
+  survivedCheck   Boolean?
+  survivedAt      DateTime?
+  expiresAt       DateTime
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([agentId, status])
+  @@index([targetId, createdAt])
+  @@unique([agentId, targetId])
 }

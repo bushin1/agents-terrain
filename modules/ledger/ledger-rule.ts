@@ -12,10 +12,6 @@ export function levelFor(validatedCount: number, levels: Settings['levels']): Se
   return current
 }
 
-/**
- * Montant d'un gain. `validatedCount` = missions VALIDATED de l'agent au moment de la création du gain,
- * mission courante comprise. URGENCY reprend le bonus de la mission, sans bonus de niveau.
- */
 export function computeAmount(input: {
   tier: EarningTier
   validatedCount: number
@@ -32,30 +28,28 @@ export function computeAmount(input: {
 
 export type Eligibility = { ok: true } | { ok: false; reason: string }
 
-/**
- * Un gain se rattache toujours à une mission. Pour LIVE et CLIENT, c'est la mission VISIT d'origine
- * du pro (spec §6.1) ; les délais sont comptés depuis sa validation (spec §6.3).
- */
 export function checkEligibility(input: {
   tier: EarningTier
   mission: { type: MissionType; status: MissionStatus; urgencyBonusCents: number; validatedAt: Date | null }
   now: Date
 }): Eligibility {
   const { tier, mission, now } = input
-  if (mission.status !== 'VALIDATED') return { ok: false, reason: 'mission non validée' }
+  if (mission.status !== 'VALIDATED') return { ok: false, reason: "mission non validée" }
   switch (tier) {
     case 'VISIT':
-      return mission.type === 'VISIT' ? { ok: true } : { ok: false, reason: 'palier VISIT réservé aux missions VISIT' }
+      return mission.type === 'VISIT' ? { ok: true } : { ok: false, reason: "palier VISIT réservé aux missions VISIT" }
     case 'RETURN_VISIT':
-      return mission.type === 'RETURN_VISIT' ? { ok: true } : { ok: false, reason: 'palier RETURN_VISIT réservé aux missions de retour' }
+      return mission.type === 'RETURN_VISIT' ? { ok: true } : { ok: false, reason: "palier RETURN_VISIT réservé aux missions de retour" }
     case 'URGENCY':
-      return mission.urgencyBonusCents > 0 ? { ok: true } : { ok: false, reason: 'aucun bonus urgence sur cette mission' }
+      return mission.urgencyBonusCents > 0 ? { ok: true } : { ok: false, reason: "aucun bonus urgence sur cette mission" }
     case 'LIVE':
     case 'CLIENT': {
-      if (mission.type !== 'VISIT' || !mission.validatedAt) return { ok: false, reason: 'il faut la mission VISIT d’origine' }
+      if (mission.type !== 'VISIT' || !mission.validatedAt) return { ok: false, reason: "il faut la mission VISIT d'origine" }
       const days = tier === 'LIVE' ? LIVE_WINDOW_DAYS : CLIENT_WINDOW_DAYS
       if (now.getTime() - mission.validatedAt.getTime() > days * DAY_MS) return { ok: false, reason: `délai de ${days} jours dépassé` }
       return { ok: true }
     }
+    case 'QUICK_TASK':
+      return mission.type === 'QUICK_TASK' ? { ok: true } : { ok: false, reason: "palier QUICK_TASK réservé aux quick tasks" }
   }
 }

@@ -15,7 +15,8 @@ vi.mock('@/modules/geo', async (importOriginal) => ({
 const now = new Date('2026-10-16T12:00:00Z')
 const form = {
   firstName: 'Maya', lastName: 'Thompson-Okafor', email: 'maya@example.com', phone: '(617) 555-1234',
-  birthDate: '2005-03-14', zip: '02116', radiusMiles: '25', hasCar: 'yes', availability: ['mon-am'], confirm18: 'on',
+  birthDate: '2005-03-14', occupation: 'College student', howDidYouHear: 'Instagram ad',
+  zip: '02116', radiusMiles: '25', hasCar: 'yes', availability: ['mon-am'], confirm18: 'on',
 }
 const lastCode = () => /(\d{6})/.exec(memorySmsDriver.sent.at(-1)!.body)![1]
 

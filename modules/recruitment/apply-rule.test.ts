@@ -8,6 +8,8 @@ const valid = {
   email: ' Maya.T@Example.com ',
   phone: '(617) 555-1234',
   birthDate: '2005-03-14',
+  occupation: 'College student',
+  howDidYouHear: 'Instagram ad',
   zip: '02116',
   radiusMiles: '25',
   hasCar: 'yes',

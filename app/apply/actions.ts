@@ -11,6 +11,8 @@ export async function submitApplication(_prev: ApplyState, form: FormData): Prom
     email: String(form.get('email') ?? ''),
     phone: String(form.get('phone') ?? ''),
     birthDate: String(form.get('birthDate') ?? ''),
+    occupation: String(form.get('occupation') ?? ''),
+    howDidYouHear: String(form.get('howDidYouHear') ?? ''),
     zip: String(form.get('zip') ?? ''),
     radiusMiles: String(form.get('radiusMiles') ?? ''),
     hasCar: String(form.get('hasCar') ?? ''),

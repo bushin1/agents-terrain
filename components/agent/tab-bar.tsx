@@ -5,6 +5,7 @@ import { Icon } from '@/components/mc/icons'
 
 const TABS = [
   { href: '/agent/missions', icon: 'map', label: 'Missions' },
+  { href: '/agent/tasks', icon: 'zap', label: 'Tasks' },
   { href: '/agent/visits', icon: 'calendar', label: 'Visits' },
   { href: '/agent/earnings', icon: 'wallet', label: 'Earnings' },
   { href: '/agent/profile', icon: 'user', label: 'Profile' },

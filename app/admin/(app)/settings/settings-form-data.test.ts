@@ -11,7 +11,7 @@ const defaults = settingsToFormDefaults(DEFAULT_SETTINGS)
 
 describe('formulaire des réglages', () => {
   it('affiche les montants en dollars et relit exactement les réglages', () => {
-    expect(defaults).toMatchObject({ tier_VISIT: '40.00', tier_RETURN_VISIT: '20.00', level_1_minValidated: '5', level_1_bonusPct: '10', widenRadiusMiles: '50' })
+    expect(defaults).toMatchObject({ tier_VISIT: '40.00', tier_RETURN_VISIT: '20.00', tier_QUICK_TASK: '3.00', level_1_minValidated: '5', level_1_bonusPct: '10', widenRadiusMiles: '50', qt_warmupCount: '15', qt_expirationHours: '2' })
     expect(settingsFromForm(formOf(defaults))).toEqual({ ok: true, value: DEFAULT_SETTINGS })
   })
   it('convertit les dollars en cents, virgule acceptée', () => {

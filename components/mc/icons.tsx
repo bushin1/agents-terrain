@@ -54,6 +54,9 @@ const PATHS = {
   "check-in": '<path d="M10.5 4.5h7v15h-7M3.5 12h10M10.5 9l3 3-3 3"/>',
   invite: '<circle cx="10" cy="8" r="3.5"/><path d="M3.5 19.5c1-3.2 3.6-5 6.5-5 1.4 0 2.8.4 3.9 1.2M18 13v6M15 16h6"/>',
   route: '<circle cx="6" cy="18" r="2"/><circle cx="18" cy="6" r="2"/><path d="M8 18h7.5a3 3 0 000-6h-7a3 3 0 010-6H16"/>',
+  zap: '<path d="M13 2L4.5 13.5h6L9.5 22l9-11.5h-6z"/>',
+  trophy: '<path d="M8 21h8M12 17v4M7.5 4h9v5a4.5 4.5 0 01-9 0zM7.5 4H5a1.5 1.5 0 00-1.5 1.5v1A3 3 0 006.5 9.5h1M16.5 4H19a1.5 1.5 0 011.5 1.5v1A3 3 0 0117.5 9.5h-1"/>',
+  level: '<path d="M4.5 19.5l4-5 3.5 3 4-5.5 3.5 3.5"/><rect x="3.5" y="4" width="17" height="16" rx="2"/>',
 } as const
 
 export type IconName = keyof typeof PATHS

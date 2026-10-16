@@ -57,6 +57,7 @@ export interface StepsData {
 export const STEPS_BY_TYPE: Record<MissionType, readonly StepName[]> = {
   VISIT: ['checkin', 'consent', 'profile', 'invite', 'photos', 'verification', 'checkout'],
   RETURN_VISIT: ['checkin', 'invite', 'verification', 'checkout'],
+  QUICK_TASK: [],
 }
 
 const FIXABLE: readonly StepName[] = ['invite', 'photos', 'verification']

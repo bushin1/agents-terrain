@@ -11,10 +11,11 @@ import { STEPS, birthDateFromParts, firstStepWithError } from './apply-steps'
 type Values = {
   firstName: string; lastName: string; email: string; phone: string
   month: string; day: string; year: string
+  occupation: string; howDidYouHear: string
   zip: string; radiusMiles: string; hasCar: 'yes' | 'no' | ''; availability: string[]; confirm18: boolean
 }
 
-const EMPTY: Values = { firstName: '', lastName: '', email: '', phone: '', month: '', day: '', year: '', zip: '', radiusMiles: '10', hasCar: '', availability: [], confirm18: false }
+const EMPTY: Values = { firstName: '', lastName: '', email: '', phone: '', month: '', day: '', year: '', occupation: '', howDidYouHear: '', zip: '', radiusMiles: '10', hasCar: '', availability: [], confirm18: false }
 const DAY_LABEL: Record<(typeof DAYS)[number], string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' }
 
 function Field({ id, label, error, help, children }: { id: string; label: string; error?: string; help?: string; children: React.ReactNode }) {
@@ -50,7 +51,9 @@ export function ApplyForm() {
   function toFormData(): FormData {
     const f = new FormData()
     f.set('firstName', v.firstName); f.set('lastName', v.lastName); f.set('email', v.email); f.set('phone', v.phone)
-    f.set('birthDate', birthDateFromParts(v.month, v.day, v.year)); f.set('zip', v.zip); f.set('radiusMiles', v.radiusMiles); f.set('hasCar', v.hasCar)
+    f.set('birthDate', birthDateFromParts(v.month, v.day, v.year))
+    f.set('occupation', v.occupation); f.set('howDidYouHear', v.howDidYouHear)
+    f.set('zip', v.zip); f.set('radiusMiles', v.radiusMiles); f.set('hasCar', v.hasCar)
     v.availability.forEach((a) => f.append('availability', a))
     if (v.confirm18) f.set('confirm18', 'on')
     return f
@@ -73,11 +76,11 @@ export function ApplyForm() {
           <Link className="mc-iconbtn" aria-label="Back" href="/"><Icon name="arrow-left" /></Link>
         )}
         <span className="mc-appbar__title">Apply</span>
-        <span className="body-s mc-muted mc-num" style={{ paddingRight: 12 }}>{step + 1} of 6</span>
+        <span className="body-s mc-muted mc-num" style={{ paddingRight: 12 }}>{step + 1} of {STEPS.length}</span>
       </header>
       <div style={{ padding: '0 16px' }}>
-        <div className="mc-progress" role="progressbar" aria-label={`Step ${step + 1} of 6`} aria-valuemin={0} aria-valuemax={6} aria-valuenow={step + 1}>
-          <span style={{ width: `${((step + 1) / 6) * 100}%` }} />
+        <div className="mc-progress" role="progressbar" aria-label={`Step ${step + 1} of ${STEPS.length}`} aria-valuemin={0} aria-valuemax={STEPS.length} aria-valuenow={step + 1}>
+          <span style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} />
         </div>
       </div>
       <div className="mc-scroll" style={{ paddingTop: 28 }}>
@@ -113,6 +116,16 @@ export function ApplyForm() {
           )}
           {step === 3 && (
             <>
+              <Field id="occupation" label="What do you do?" error={errors.occupation} help="Student, driver, freelancer — anything goes.">
+                <input className="mc-input" id="occupation" value={v.occupation} onChange={(e) => set('occupation', e.target.value)} placeholder="e.g. College student" required />
+              </Field>
+              <Field id="howDidYouHear" label="How did you hear about us?" error={errors.howDidYouHear}>
+                <input className="mc-input" id="howDidYouHear" value={v.howDidYouHear} onChange={(e) => set('howDidYouHear', e.target.value)} placeholder="e.g. Instagram ad, friend referral" required />
+              </Field>
+            </>
+          )}
+          {step === 4 && (
+            <>
               <Field id="zip" label="Home ZIP code" error={errors.zip} help="Used to find missions near you. Never shown to businesses.">
                 <input className="mc-input mc-num" id="zip" inputMode="numeric" maxLength={5} value={v.zip} onChange={(e) => set('zip', e.target.value.replace(/\D/g, ''))} required />
               </Field>
@@ -134,7 +147,7 @@ export function ApplyForm() {
               </div>
             </>
           )}
-          {step === 4 && (
+          {step === 5 && (
             <div className="mc-field">
               <span className="mc-label" id="avail">Pick every time you could visit a business</span>
               <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 8, alignItems: 'center' }} role="group" aria-labelledby="avail">
@@ -156,12 +169,13 @@ export function ApplyForm() {
               <span className="mc-help">{v.availability.length} of {AVAILABILITY_SLOTS.length} selected. You can change this later.</span>
             </div>
           )}
-          {step === 5 && (
+          {step === 6 && (
             <>
               <div className="mc-card">
                 <div className="mc-kv">
                   <div><span className="k">Name</span><span className="v">{v.firstName} {v.lastName}</span></div>
                   <div><span className="k">Mobile</span><span className="v">{v.phone}</span></div>
+                  <div><span className="k">Occupation</span><span className="v">{v.occupation}</span></div>
                   <div><span className="k">ZIP · radius</span><span className="v">{v.zip} · {v.radiusMiles} mi</span></div>
                   <div><span className="k">Time slots</span><span className="v">{v.availability.length}</span></div>
                 </div>

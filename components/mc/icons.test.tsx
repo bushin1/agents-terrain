@@ -18,7 +18,7 @@ describe('Icon', () => {
 
   it('aucune étoile dans le jeu d’icônes, ni symbole d’argent', () => {
     expect(ICON_NAMES.filter((n) => /star|dollar|money/.test(n))).toEqual([])
-    expect(ICON_NAMES).toHaveLength(49)
+    expect(ICON_NAMES).toHaveLength(52)
   })
 })
 
