@@ -39,7 +39,7 @@ Ces règles sont enseignées en formation, rappelées dans l'app et imposées pa
 Une page : la promesse (« Get paid to help local contractors get on Google Maps »), le fonctionnement en 3 étapes, les montants par palier, un exemple de « up to $X/month », une FAQ qui commence par « When do I get paid? », un bouton « Apply ».
 
 ### 4.2 Candidature
-Champs : prénom, nom, email, mobile US, date de naissance (18 ans révolus exigés, sinon refus immédiat), ZIP, rayon de déplacement (5 / 10 / 25 / 50 miles), véhicule (oui/non), disponibilités (créneaux de la semaine). Vérification du mobile par code SMS. Connexion par lien magique envoyé par email (Auth.js). Le ZIP est géocodé en lat/lng pour le dispatch.
+Champs : prénom, nom, email, mobile US, date de naissance (18 ans révolus exigés, sinon refus immédiat), ZIP, rayon de déplacement (5 / 10 / 25 / 50 miles), véhicule (oui/non), disponibilités (créneaux de la semaine). Vérification du mobile par code SMS. Connexion ensuite par code SMS : le mobile sert d'identifiant, aucun email n'est nécessaire pour se connecter (Auth.js, fournisseur `Credentials`). Le ZIP est géocodé en lat/lng pour le dispatch.
 
 ### 4.3 Formation (`academy`)
 5 modules, chacun = une vidéo de 3 à 5 min + 3 à 5 questions :
@@ -84,7 +84,7 @@ Un agent a au maximum 3 missions `ACCEPTED` en même temps.
 
 Le texte d'accord (étape 2) dit que le pro : est propriétaire de la fiche ; autorise [marque] / Allo-Chantiers comme gestionnaire ; accepte d'être recontacté pour une offre de gestion ; peut retirer l'accès gestionnaire à tout moment ; recevra un SMS pour noter la visite.
 
-**Hors-ligne** : les étapes sont enregistrées localement (IndexedDB) et envoyées dès que le réseau revient. Les photos sont envoyées directement au stockage objet par URL signée.
+**Hors-ligne** : les étapes sont enregistrées localement (IndexedDB) et envoyées dès que le réseau revient. Les photos sont compressées sur le téléphone (1600 px de côté maximum), leurs données EXIF lues avant compression, puis envoyées à l'API qui les range dans le stockage objet.
 
 **Après la soumission** : SMS automatique au pro : « Did [prénom de l'agent] visit you today? Reply 1–5 to rate the visit, or NO if no one came. »
 
@@ -93,7 +93,7 @@ Chaque mission affiche ses 3 paliers avec leur état (à venir / gagné / payé)
 
 ## 5. Back-office
 
-Accès par compte `AdminUser` (email + mot de passe + TOTP). Deux rôles : `ADMIN` (tout) et `SETTER` (pros et missions uniquement).
+Accès par Google Workspace (comptes @allo-chantiers.fr, avec leur double authentification, comme gmb-tracker), réservé aux emails présents dans `AdminUser`. Deux rôles : `ADMIN` (tout) et `SETTER` (pros et missions uniquement).
 
 1. **Pros** : liste avec filtres (statut, ville, métier) ; fiche pro avec notes d'appel ; import CSV (nom, contact, téléphone, adresse, métier). Statuts en section 7.3. Lors de la pré-qualification, le setter vérifie sur Maps si le pro a déjà une fiche publique et l'enregistre (`existingPlaceId`) ; la mission demande alors de la revendiquer plutôt que d'en créer une.
 2. **Missions** : création depuis un pro `AGREED` (créneau, catégorie suggérée, consignes) ; `publishedAt` = création.
@@ -217,7 +217,7 @@ Un gain n'est jamais rattaché à deux `Payout` non finaux à la fois. Pas de vi
 ## 9. Architecture
 
 ### 9.1 Stack et déploiement
-Next.js 16 (App Router), Prisma, Postgres, Auth.js, Tailwind : la même stack que gmb-tracker. Nouveau repo GitHub dans l'organisation allo-chantiers. Déploiement par GitHub → VPS → docker compose → Caddy, sur son propre domaine. Jamais de copie directe de fichiers sur le VPS. Côté agent : PWA installable (caméra, géolocalisation, hors-ligne). Photos sur Cloudflare R2, envoyées par URL signée. Tâches planifiées : une route par tâche, protégée par un secret, appelée par cron.
+Next.js 16 (App Router), Prisma, Postgres, Auth.js, Tailwind : la même stack que gmb-tracker. Nouveau repo GitHub dans l'organisation allo-chantiers. Déploiement par GitHub → VPS → docker compose → Caddy, sur son propre domaine. Jamais de copie directe de fichiers sur le VPS. Côté agent : PWA installable (caméra, géolocalisation, hors-ligne). Photos sur Cloudflare R2 (disque local en développement), envoyées via l'API. Tâches planifiées : une route par tâche, protégée par un secret, appelée par cron.
 
 ### 9.2 Modules
 Chaque module a un dossier `modules/<nom>/` qui expose une interface publique (`index.ts`). Les autres modules n'importent que cette interface.
@@ -241,8 +241,8 @@ Chaque module a un dossier `modules/<nom>/` qui expose une interface publique (`
 ### 9.3 Données (Prisma, résumé)
 - `Agent` : identité, date de naissance, mobile vérifié, ZIP, lat/lng, rayon, véhicule, disponibilités, `status`, `failedAttempts`, `stripeAccountId`, `stripePayoutsEnabled`, `contractVersion`, `contractSignedAt`, `contractIp`
 - `TrainingAttempt` : agentId, score, réponses, date
-- `Pro` : nom de l'entreprise, contact, téléphone, adresse, ville, code postal, lat/lng, métier, `status`, notes, `existingPlaceId?` (fiche publique déjà existante avant la visite), `listingStatus?`, `listingDeadlineAt?`, `googleLocationName?` (accès gestionnaire obtenu), `placeId?`, `mapsUrl?`, `liveAt?`, `billingAccount?`, `stripeCustomerId?`, `convertedAt?`, `lostReason?`
-- `Mission` : proId, agentId?, `type`, `parentMissionId?`, `status`, `slotAt`, `publishedAt`, `broadcastRadiusMiles?`, `urgencyBonusCents`, catégorie suggérée, consignes, `validatedAt?`, `needsFixAt?`, `proRating?`, `proDenied`
+- `Pro` : nom de l'entreprise, contact, téléphone, adresse, ville, État, code postal, lat/lng, fuseau horaire (IANA, proposé selon l'État et modifiable), métier, `status`, notes, `existingPlaceId?` (fiche publique déjà existante avant la visite), `listingStatus?`, `listingDeadlineAt?`, `googleLocationName?` (accès gestionnaire obtenu), `placeId?`, `mapsUrl?`, `liveAt?`, `billingAccount?`, `stripeCustomerId?`, `convertedAt?`, `lostReason?`
+- `Mission` : proId, agentId?, `type`, `parentMissionId?`, `status`, `slotAt`, `publishedAt`, `broadcastRadiusMiles?`, `urgencyBonusCents`, catégorie suggérée, consignes, `validatedAt?`, `needsFixAt?`, `proRating?`, `proDenied`, `reminderSentAt?`, `noShowSmsAt?`, `postVisitSmsAt?`
 - `Submission` : missionId, check-in (lat, lng, précision, horodatage téléphone, `receivedAt`), signature (clé R2, nom, version du texte, horodatages), données de chaque étape avec horodatages, choix d'invitation, choix de vérification, check-out
 - `Photo` : submissionId, clé R2, catégorie, EXIF (date, lat/lng), `receivedAt`
 - `Earning` : agentId, missionId, `tier`, `baseAmountCents`, `levelBonusPct`, `amountCents`, `status`, payoutId?, motif d'annulation? — **unique (missionId, tier)**
@@ -278,7 +278,7 @@ Le lien entre un client et Stripe vit dans le système commercial actuel (base l
 Les fiches de ces clients sont ajoutées au suivi de gmb-tracker par le process habituel de l'équipe. Les signaux de l'API GBP (photos, posts) n'y remontent pas, car le compte gestionnaire est différent ; c'est accepté en V1.
 
 ### 9.6 Notifications
-SMS via Twilio (vérification du mobile, confirmation et rappel de créneau, relance d'agent sans check-in, SMS post-visite au pro, instructions d'invitation gestionnaire). Emails transactionnels (lien de connexion, statut de candidature, virement envoyé) via un fournisseur à brancher (Resend par défaut), derrière une interface `sendEmail` unique.
+SMS via Twilio (vérification du mobile, confirmation et rappel de créneau, relance d'agent sans check-in, SMS post-visite au pro, instructions d'invitation gestionnaire). Emails transactionnels (statut de candidature, virement envoyé ; à partir de la phase 2) via un fournisseur à brancher (Resend par défaut), derrière une interface `sendEmail` unique.
 
 ## 10. Anti-fraude (V1)
 
