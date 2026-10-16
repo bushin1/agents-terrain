@@ -1,7 +1,7 @@
 /**
  * Données de démonstration pour le VPS (ou local avec SEED_DEMO=1).
  * Crée : admin, agent GOLD avec historique, agent STARTER frais, cibles d'avis.
- * Usage : SEED_DEMO=1 DATABASE_URL=... AUTH_SECRET=... npx tsx scripts/seed-demo.ts
+ * Usage : SEED_DEMO=1 npx tsx scripts/seed-demo.ts
  */
 import * as dotenv from 'dotenv'
 dotenv.config({ path: '.env.local' })
@@ -42,22 +42,29 @@ async function main() {
     update: { role: 'ADMIN' },
   })
 
-  // ── Cibles d'avis ────────────────────────────────────────────────────────────
-  const targets = [
+  // ── 12 cibles d'avis (1 par mission GOLD pour respecter la contrainte unique) ─
+  const targetDefs = [
     { placeId: 'demo-target-1', name: 'Boulangerie Montréal', city: 'Montréal', state: 'QC', trade: 'bakery', tier: 'STANDARD' as const },
     { placeId: 'demo-target-2', name: 'Café Québec', city: 'Québec', state: 'QC', trade: 'cafe', tier: 'STANDARD' as const },
     { placeId: 'demo-target-3', name: 'Resto Paris 11', city: 'Paris', state: 'FR', trade: 'restaurant', tier: 'SACRIFICIAL' as const },
     { placeId: 'demo-target-4', name: 'Pizza New York', city: 'New York', state: 'NY', trade: 'pizza', tier: 'SACRIFICIAL' as const },
+    { placeId: 'demo-target-5', name: 'Épicerie Laval', city: 'Laval', state: 'QC', trade: 'grocery', tier: 'STANDARD' as const },
+    { placeId: 'demo-target-6', name: 'Salon Coiffure Mtl', city: 'Montréal', state: 'QC', trade: 'hair_salon', tier: 'STANDARD' as const },
+    { placeId: 'demo-target-7', name: 'Garage Montréal', city: 'Montréal', state: 'QC', trade: 'auto_repair', tier: 'SACRIFICIAL' as const },
+    { placeId: 'demo-target-8', name: 'Pharmacie Longueuil', city: 'Longueuil', state: 'QC', trade: 'pharmacy', tier: 'STANDARD' as const },
+    { placeId: 'demo-target-9', name: 'Dentiste Verdun', city: 'Montréal', state: 'QC', trade: 'dentist', tier: 'PREMIUM' as const },
+    { placeId: 'demo-target-10', name: 'Gym Plateau', city: 'Montréal', state: 'QC', trade: 'gym', tier: 'STANDARD' as const },
+    { placeId: 'demo-target-11', name: 'Librairie Outremont', city: 'Montréal', state: 'QC', trade: 'bookstore', tier: 'SACRIFICIAL' as const },
+    { placeId: 'demo-target-12', name: 'Café Lyon', city: 'Lyon', state: 'FR', trade: 'cafe', tier: 'SACRIFICIAL' as const },
   ]
-  for (const t of targets) {
+  for (const t of targetDefs) {
     await prisma.reviewTarget.upsert({ where: { placeId: t.placeId }, create: t, update: {} })
   }
-  const [t1, t2] = await Promise.all([
-    prisma.reviewTarget.findUniqueOrThrow({ where: { placeId: 'demo-target-1' } }),
-    prisma.reviewTarget.findUniqueOrThrow({ where: { placeId: 'demo-target-2' } }),
-  ])
+  const targets = await Promise.all(
+    targetDefs.map((t) => prisma.reviewTarget.findUniqueOrThrow({ where: { placeId: t.placeId } }))
+  )
 
-  // ── Agent GOLD (historique) ───────────────────────────────────────────────────
+  // ── Agent GOLD (historique 12 avis) ──────────────────────────────────────────
   let gold = await prisma.agent.findUnique({ where: { email: GOLD_EMAIL } })
   if (!gold) {
     gold = await prisma.agent.create({
@@ -82,34 +89,37 @@ async function main() {
         contractIp: '127.0.0.1',
       },
     })
+  }
 
-    // Pro fantôme pour les missions quick-task
-    let sysPro = await prisma.pro.findUnique({ where: { id: SYSTEM_PRO_ID } })
-    if (!sysPro) {
-      sysPro = await prisma.pro.create({
-        data: {
-          id: SYSTEM_PRO_ID,
-          businessName: 'Quick Task System',
-          phone: '+15550000000',
-          trade: 'system',
-          address: '1 System St',
-          city: 'Montréal',
-          state: 'QC',
-          zip: 'H1A 0A1',
-          lat: 45.5,
-          lng: -73.5,
-          timeZone: 'America/Toronto',
-          status: 'CLIENT',
-        },
-      })
-    }
+  // Pro fantôme pour les missions quick-task (idempotent)
+  const sysPro = await prisma.pro.findUnique({ where: { id: SYSTEM_PRO_ID } })
+  if (!sysPro) {
+    await prisma.pro.create({
+      data: {
+        id: SYSTEM_PRO_ID,
+        businessName: 'Quick Task System',
+        phone: '+15550000000',
+        trade: 'system',
+        address: '1 System St',
+        city: 'Montréal',
+        state: 'QC',
+        zip: 'H1A 0A1',
+        lat: 45.5,
+        lng: -73.5,
+        timeZone: 'America/Toronto',
+        status: 'CLIENT',
+      },
+    })
+  }
 
-    // 12 missions quick-task VERIFIED (historique avis)
+  // Missions historique (seulement si pas encore créées)
+  const existingResults = await prisma.quickTaskResult.count({ where: { agentId: gold.id } })
+  if (existingResults === 0) {
     const now = Date.now()
     for (let i = 0; i < 12; i++) {
       const daysAgo = 30 - i * 2
       const slotAt = new Date(now - daysAgo * 24 * H)
-      const targetId = i % 2 === 0 ? t1.id : t2.id
+      const targetId = targets[i].id // chaque mission = cible unique
       const mission = await prisma.mission.create({
         data: {
           proId: SYSTEM_PRO_ID,
