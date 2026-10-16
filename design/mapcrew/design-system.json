@@ -1,0 +1,25 @@
+{
+  "v": 3,
+  "assetGroups": {},
+  "blobs": {},
+  "createdOnFiles": {
+    "at": "2026-10-16T09:05:15Z",
+    "v": 1
+  },
+  "docs": {
+    "readme": "project/README.md",
+    "sections": []
+  },
+  "groups": [],
+  "lastChange": {
+    "at": "2026-10-16T09:05:15Z",
+    "by": "Marvin",
+    "note": "First version: tokens, components, landing page and 8 app screens",
+    "via": "Cowork"
+  },
+  "layout": "files",
+  "libraries": [],
+  "namespace": "MapCrew",
+  "sections": {},
+  "title": "MapCrew"
+}

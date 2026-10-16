@@ -1,0 +1,48 @@
+<!-- @dsCard group="App screens" height=960 width=884 subtitle="What to expect, payout breakdown, 24 h cancellation rule" -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>App — Mission detail</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Public+Sans:ital,wght@0,400..700;1,400&display=swap">
+<style>html,body{margin:0;background:var(--surface-sunk)}</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+var M = window.MapCrew, I = M.icon;
+var back = function (t, right) { return `<div class="mc-appbar"><button type="button" class="mc-iconbtn" aria-label="Back">${I("arrow-left")}</button><span class="mc-appbar__title">${t}</span>${right || ""}</div>`; };
+
+var detail = `<div style="position:relative;flex:none">${M.map({ seed: 33, cols: 5, rows: 4, gap: 2.8, height: 200, you: [26, 74], pins: [{ x: 64, y: 50, selected: true, label: "Mission location (approximate)" }], route: "M26 74 L26 62 L64 62 L64 50", style: "border-radius:0", water: false })}
+  <div style="position:absolute;left:8px;top:6px;z-index:5"><button type="button" class="mc-iconbtn" style="background:var(--surface);box-shadow:var(--shadow-card)" aria-label="Back">${I("arrow-left")}</button></div></div>
+<div class="mc-scroll" style="padding-top:20px">
+  <div class="mc-row"><span class="mc-badge mc-badge--bonus">${I("flag")} Bonus +$10</span><span class="mc-badge mc-badge--outline">${I("sun")} Daytime</span></div>
+  <h1 class="h1" style="margin-top:12px">Concrete contractor</h1>
+  <p class="mc-muted" style="margin-top:4px">Aurora, IL · 5.8 mi · about 14 min by car</p>
+  <div class="mc-card" style="margin-top:16px;display:flex;flex-direction:column;gap:12px">
+    <div class="mc-row" style="gap:12px">${I("calendar")}<div><b>Tue, Oct 20 · 1:00–2:00 PM</b><div class="body-s mc-muted">Plan for 45–60 minutes on site</div></div></div>
+    <div class="mc-row" style="gap:12px">${I("store")}<div><b>The owner agreed to this visit</b><div class="body-s mc-muted">Booked by our team on Oct 14. Exact address after you accept.</div></div></div>
+  </div>
+  <h2 class="h3" style="margin-top:24px">What to expect</h2>
+  <ul class="mc-stack" style="margin-top:12px;gap:10px">${["Owner has a phone and a Google account ready", "Create a new profile (none exists yet)", "Photos: 3 trucks, a yard with equipment, past driveways", "Video verification likely — allow 10 minutes"].map(function (t) { return `<li class="mc-row" style="gap:10px;align-items:flex-start"><span style="color:var(--ink-muted)">${I("check", "mc-ico--sm")}</span><span style="font-size:15px">${t}</span></li>`; }).join("")}</ul>
+  <h2 class="h3" style="margin-top:24px">Your pay for this business</h2>
+  <div class="mc-card" style="margin-top:12px"><div class="mc-kv">
+    <div><span class="k">Visit validated</span><span class="v">$40.00</span></div>
+    <div><span class="k">Profile goes live</span><span class="v">+$25.00</span></div>
+    <div><span class="k">If they become a customer</span><span class="v">+$50.00</span></div>
+    <div><span class="k">Mission bonus</span><span class="v">+$10.00</span></div>
+    <div><span class="k"><span class="mc-level mc-level--silver" style="height:24px">Silver +10%</span></span><span class="v">+$11.50</span></div>
+    <div><span class="k mc-kv__total">Up to</span><span class="v money">$136.50</span></div></div>
+    <p class="body-s mc-muted" style="margin-top:8px">The +$50 depends on the owner's decision. Level bonus applies to the three payout steps.</p></div>
+  <div class="mc-card mc-card--sunk" style="margin-top:12px;display:flex;gap:12px">${I("info")}<p class="body-s"><b>Cancel free up to 24 h before</b> — until Mon, Oct 19 at 1:00 PM. After that, contact support.</p></div>
+</div>
+<div class="mc-bottom"><button type="button" class="mc-btn mc-btn--primary mc-btn--lg mc-btn--block">Accept mission</button></div>`;
+document.getElementById("root").innerHTML = M.board([{title:"Mission detail", html:detail},{title:"Mission detail", note:"Dark · scrolled to pay", theme:"dark", html:detail}]);
+M.hydrate(document);
+document.querySelectorAll(".mc-phone")[1].querySelector(".mc-scroll").scrollTop = 470;
+
+</script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!-- @dsCard group="App screens" height=960 width=884 subtitle="Payable balance, next Friday payout, history, level progress" -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>App — Earnings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Public+Sans:ital,wght@0,400..700;1,400&display=swap">
+<style>html,body{margin:0;background:var(--surface-sunk)}</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+var M = window.MapCrew, I = M.icon;
+var back = function (t, right) { return `<div class="mc-appbar"><button type="button" class="mc-iconbtn" aria-label="Back">${I("arrow-left")}</button><span class="mc-appbar__title">${t}</span>${right || ""}</div>`; };
+
+var earn = `<div class="mc-appbar mc-appbar--pad"><span class="mc-appbar__title" style="font:650 24px/1.2 var(--font-display)">Earnings</span><span class="mc-level mc-level--bronze">Bronze</span></div>
+<div class="mc-scroll">
+  <div class="mc-card mc-card--forest" style="padding:20px">
+    <p class="body-s" style="color:var(--on-forest-muted)">Payable balance</p>
+    <p class="money-xl" style="margin-top:6px">$105.00</p>
+    <p class="body-s" style="color:var(--on-forest-muted);margin-top:6px">3 validated payments · goes out Friday</p>
+    <div style="margin-top:16px;padding:12px 14px;border-radius:var(--radius-md);background:var(--paper);color:var(--ink);display:flex;gap:12px;align-items:center">${I("calendar")}<div style="flex:1"><b>Next payout: Friday, Oct 23</b><div class="body-s mc-muted">Via Stripe to Bank ••••4821</div></div></div>
+  </div>
+  <div class="mc-card" style="margin-top:12px;display:flex;gap:12px;align-items:center"><span style="color:var(--pending)">${I("clock")}</span><div style="flex:1"><b class="mc-num">$75.00 pending</b><div class="body-s mc-muted">Profile-live and customer steps not reached yet</div></div>${I("chev-right")}</div>
+  <div class="mc-card" style="margin-top:12px">
+    <div class="mc-between"><b>2 more visits to Silver</b><span class="mc-level mc-level--silver">Silver</span></div>
+    <div class="mc-progress" style="margin-top:12px" role="progressbar" aria-label="3 of 5 validated visits" aria-valuenow="3" aria-valuemax="5"><span style="width:60%"></span></div>
+    <div class="mc-between" style="margin-top:8px"><span class="body-s mc-muted mc-num">3 of 5 validated visits</span><span class="body-s mc-muted">+10% on every payment</span></div>
+  </div>
+  <div class="mc-between" style="margin:24px 0 8px"><h2 class="h3">Payout history</h2><button type="button" class="mc-btn mc-btn--ghost mc-btn--sm">Tax forms</button></div>
+  <ul class="mc-list">${[["Fri, Oct 16", "2 payments", "$65.00"], ["Fri, Oct 9", "1 payment", "$40.00"], ["Fri, Oct 2", "1 payment", "$40.00"]].map(function (r) { return `<li><span class="mc-trade" style="width:40px;height:40px;background:var(--success-soft);color:var(--success)">${I("check")}</span><div style="flex:1"><b>${r[0]}</b><div class="body-s mc-muted">${r[1]} · Paid to ••••4821</div></div><span class="money">${r[2]}</span></li>`; }).join("")}</ul>
+</div>` + M.tabbar("earnings");
+document.getElementById("root").innerHTML = M.board([{title:"Earnings", html:earn},{title:"Earnings", note:"Dark", theme:"dark", html:earn}]);
+M.hydrate(document);
+
+</script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+<!-- @dsCard group="Landing page" height=2700 width=1504 subtitle="Same markup as mobile; container queries switch the layout at 900px" -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LandingDesktop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Public+Sans:ital,wght@0,400..700;1,400&display=swap">
+<style>html,body{margin:0;background:var(--surface-sunk)}</style>
+</head>
+<body>
+<div class="mc mc-board" data-theme="light" style="flex-direction:column;gap:20px">
+ <div class="mc-board__cap"><b>Desktop · 1440</b><span>· Hero, How it works, Pay</span></div>
+ <div id="d1" style="width:1440px;border-radius:20px;overflow:hidden;box-shadow:var(--shadow-raised)"></div></div>
+<script>
+MapCrew.renderLanding(document.getElementById("d1"), ["nav", "hero", "how", "pay"]);
+</script>
+</body>
+</html>

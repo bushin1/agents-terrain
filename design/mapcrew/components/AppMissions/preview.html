@@ -1,0 +1,46 @@
+<!-- @dsCard group="App screens" height=960 width=884 subtitle="Map/list toggle (live), mission cards, Bonus tag" -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>App — Missions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Public+Sans:ital,wght@0,400..700;1,400&display=swap">
+<style>html,body{margin:0;background:var(--surface-sunk)}</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+var M = window.MapCrew, I = M.icon;
+var back = function (t, right) { return `<div class="mc-appbar"><button type="button" class="mc-iconbtn" aria-label="Back">${I("arrow-left")}</button><span class="mc-appbar__title">${t}</span>${right || ""}</div>`; };
+
+var missions = [{ trade: "fencing", title: "Fence contractor", city: "Naperville, IL", dist: "3.2 mi", slot: "Tue, Oct 20 · 10–11 AM" },
+  { trade: "concrete", title: "Concrete contractor", city: "Aurora, IL", dist: "5.8 mi", slot: "Tue, Oct 20 · 1–2 PM", bonus: 10 },
+  { trade: "tree", title: "Tree service", city: "Warrenville, IL", dist: "6.1 mi", slot: "Wed, Oct 21 · 9–10 AM" },
+  { trade: "roofing", title: "Roofing contractor", city: "Lisle, IL", dist: "7.4 mi", slot: "Thu, Oct 22 · 11 AM–12 PM" }];
+var screen = function (view) {
+  return `<div data-views style="display:flex;flex-direction:column;flex:1;min-height:0">
+  <div style="padding:4px 16px 12px;display:flex;flex-direction:column;gap:12px">
+    <div class="mc-between"><h1 class="h2">Missions near you</h1><button type="button" class="mc-badge mc-badge--outline" style="height:36px;border:0;cursor:pointer">${I("pin")} 60540 · 10 mi</button></div>
+    <div class="mc-seg" role="group" aria-label="View" data-seg><button type="button" data-v="map" aria-pressed="${view === "map"}">${I("map", "mc-ico--sm")} Map</button><button type="button" data-v="list" aria-pressed="${view === "list"}">${I("list", "mc-ico--sm")} List</button></div>
+  </div>
+  <div data-view="map" ${view === "map" ? "" : "hidden"} style="flex:1;position:relative;min-height:0">
+    ${M.map({ seed: 33, cols: 5, rows: 7, gap: 2.6, you: [36, 62], radius: 300, style: "position:absolute;inset:0;border-radius:0", label: "Missions map",
+      pins: [{ x: 58, y: 40, tag: "$115", selected: true, label: "Fence contractor, 3.2 mi" }, { x: 78, y: 64, tag: "Bonus", bonus: true, label: "Concrete contractor, bonus" }, { x: 22, y: 26, tag: "$115", label: "Tree service" }, { x: 70, y: 18, tag: "$115", label: "Roofing" }, { x: 18, y: 54, state: "muted", label: "Booked" }],
+      route: "M36 62 L36 51 L58 51 L58 40" })}
+    <div class="mc-mapctl" style="right:12px;top:12px"><button type="button" class="mc-iconbtn" style="background:var(--surface);box-shadow:var(--shadow-card)" aria-label="Center on me">${I("route")}</button></div>
+    <div class="mc-sheet" style="position:absolute;left:0;right:0;bottom:0;z-index:5">${M.missionCard(missions[0]).replace("mc-mission", "mc-mission\" style=\"box-shadow:none;padding:4px 0 12px")}<button type="button" class="mc-btn mc-btn--primary mc-btn--block">View mission</button></div>
+  </div>
+  <div data-view="list" ${view === "list" ? "" : "hidden"} class="mc-scroll" style="padding-top:4px">
+    <div class="mc-chips" style="flex-wrap:nowrap;overflow:hidden;margin-bottom:12px"><button type="button" class="mc-chip" aria-pressed="true">This week</button><button type="button" class="mc-chip" aria-pressed="false">Has bonus</button><button type="button" class="mc-chip" aria-pressed="false">Morning</button></div>
+    <p class="body-s mc-muted" style="margin-bottom:12px">4 missions within 10 mi · sorted by distance</p>
+    <div class="mc-stack">${missions.map(M.missionCard).join("")}</div>
+  </div></div>` + M.tabbar("missions");
+};
+document.getElementById("root").innerHTML = M.board([{title:"Missions · map", note:"Tap a pin to preview", html:screen("map")},{title:"Missions · list", note:"Dark", theme:"dark", html:screen("list")}]);
+M.hydrate(document);
+
+</script>
+</body>
+</html>

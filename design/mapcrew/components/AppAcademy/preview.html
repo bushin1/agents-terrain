@@ -1,0 +1,65 @@
+<!-- @dsCard group="App screens" height=960 width=1314 subtitle="Video modules, quiz, then the certified moment" -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>App — Academy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Public+Sans:ital,wght@0,400..700;1,400&display=swap">
+<style>html,body{margin:0;background:var(--surface-sunk)}</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+var M = window.MapCrew, I = M.icon;
+var back = function (t, right) { return `<div class="mc-appbar"><button type="button" class="mc-iconbtn" aria-label="Back">${I("arrow-left")}</button><span class="mc-appbar__title">${t}</span>${right || ""}</div>`; };
+
+var mods = [["How a visit works", "8 min", "done"], ["Consent and privacy", "7 min", "done"], ["Setting up the profile", "12 min", "current"], ["Photos that work", "9 min", ""], ["Verification and check-out", "9 min", ""]];
+var list = `<div class="mc-appbar mc-appbar--pad"><span class="mc-appbar__title" style="font:650 24px/1.2 var(--font-display)">Academy</span><span class="mc-badge mc-badge--outline">${I("clock")} ~25 min left</span></div>
+<div class="mc-scroll">
+  <div class="mc-card mc-card--forest" style="padding:0;overflow:hidden">
+    <div style="height:150px;position:relative;background:var(--forest)">${M.map({ seed: 9, cols: 6, rows: 3, gap: 3, water: false, style: "position:absolute;inset:0;border-radius:0;opacity:.35" })}
+      <button type="button" class="mc-btn mc-btn--primary" style="position:absolute;left:16px;bottom:16px;border-radius:999px">${I("play")} Resume · 4:12 left</button></div>
+    <div style="padding:16px"><p class="overline" style="color:var(--on-forest-muted)">Module 3 of 5</p><p class="h3" style="margin-top:4px">Setting up the profile</p>
+    <div class="mc-progress" style="margin-top:12px;background:rgba(246,242,234,.15);box-shadow:none"><span style="width:65%"></span></div></div>
+  </div>
+  <div class="mc-between" style="margin:24px 0 8px"><h2 class="h3">Your modules</h2><span class="body-s mc-muted mc-num">2 of 5 done</span></div>
+  <ol class="mc-list">${mods.map(function (m, i) {
+    var st = m[2] === "done" ? `<span class="mc-badge mc-badge--success">${I("check")} Done</span>` : m[2] === "current" ? `<span class="mc-badge mc-badge--bonus">In progress</span>` : `<span class="body-s mc-muted">${m[1]}</span>`;
+    var dot = m[2] === "done" ? `<span class="mc-step__dot" style="background:var(--success);color:var(--paper);box-shadow:none">${I("check", "mc-ico--sm")}</span>` : `<span class="mc-step__dot" style="${m[2] === "current" ? "background:var(--signal);color:var(--on-signal);box-shadow:none" : ""}">${i + 1}</span>`;
+    return `<li>${dot}<div style="flex:1"><div style="font-weight:600">${m[0]}</div><div class="body-s mc-muted">Video · ${m[1]}</div></div>${st}</li>`; }).join("")}
+    <li style="background:var(--surface-sunk)"><span class="mc-step__dot">${I("lock", "mc-ico--sm")}</span><div style="flex:1"><div style="font-weight:600">Final quiz · 8 questions</div><div class="body-s mc-muted">Unlocks after module 5</div></div></li></ol>
+</div>` + M.tabbar("profile");
+var quiz = back("Quiz", `<span class="body-s mc-muted mc-num" style="padding-right:12px">3 of 8</span>`) + `<div style="padding:0 16px"><div class="mc-dots" aria-hidden="true"><span data-on></span><span data-on></span><span data-on></span><span></span><span></span><span></span><span></span><span></span></div></div>
+<div class="mc-scroll" style="padding-top:28px">
+  <h1 class="h2">The owner asks you to sign in to their Google account for them. What do you do?</h1>
+  <div class="mc-stack" role="radiogroup" style="margin-top:24px;gap:10px">
+    <label class="mc-card mc-card--flat mc-check" style="padding:16px"><input type="radio" name="q"><span>Ask for their password and type it in to save time.</span></label>
+    <label class="mc-card mc-check" style="padding:16px;box-shadow:inset 0 0 0 2px var(--success);background:var(--success-soft)"><input type="radio" name="q" checked><span><b>Hand the phone back so they sign in themselves.</b></span></label>
+    <label class="mc-card mc-card--flat mc-check" style="padding:16px"><input type="radio" name="q"><span>Create the profile under your own account and transfer it later.</span></label>
+  </div>
+  <div class="mc-card mc-card--sunk" style="margin-top:20px;display:flex;gap:12px" role="status"><span style="color:var(--success)">${I("check")}</span><div><b>That's right.</b><p class="body-s mc-muted" style="margin-top:4px">You never handle an owner's password. You guide; they type. The profile must belong to their account from the start.</p></div></div>
+</div>
+<div class="mc-bottom"><button type="button" class="mc-btn mc-btn--primary mc-btn--lg mc-btn--block">Next question</button></div>`;
+var cert = `<div class="mc-scroll" style="display:flex;flex-direction:column;justify-content:center;padding-top:40px">
+  <div style="position:relative;width:132px;height:132px;margin-bottom:32px">
+    <span style="position:absolute;inset:0;border-radius:50%;box-shadow:inset 0 0 0 2px var(--line)"></span>
+    <span style="position:absolute;inset:14px;border-radius:50%;background:var(--signal-soft)"></span>
+    <svg viewBox="0 0 34 44" style="position:absolute;left:38px;top:24px;width:56px;height:72px"><path d="M17 1.5C8.4 1.5 1.5 8.3 1.5 16.8 1.5 27.9 17 42.5 17 42.5S32.5 27.9 32.5 16.8C32.5 8.3 25.6 1.5 17 1.5z" fill="var(--signal)" stroke="var(--ink)" stroke-width="1.5"/><path d="M11.5 16.5l3.8 3.8 7.4-7.6" fill="none" stroke="var(--ink)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </div>
+  <p class="overline mc-accent-text">Academy complete</p>
+  <h1 class="display-m" style="margin-top:10px">You're certified.</h1>
+  <p class="body-l mc-muted" style="margin-top:12px">You can now accept missions within 10 miles of 60540. Quiz score: <b class="mc-num" style="color:var(--ink)">8/8</b>.</p>
+  <ol class="mc-list" style="margin-top:28px">
+    <li><span class="mc-step__dot" style="background:var(--success);color:var(--paper);box-shadow:none">${I("check", "mc-ico--sm")}</span><div style="flex:1;font-weight:600">Training and quiz</div></li>
+    <li><span class="mc-step__dot" style="background:var(--signal);color:var(--on-signal);box-shadow:none">2</span><div style="flex:1"><div style="font-weight:600">Set up payouts</div><div class="body-s mc-muted">Agreement + Stripe · about 5 min</div></div>${I("chev-right")}</li>
+    <li><span class="mc-step__dot">3</span><div style="flex:1;font-weight:600">Accept your first mission</div></li></ol>
+</div>
+<div class="mc-bottom"><button type="button" class="mc-btn mc-btn--primary mc-btn--lg mc-btn--block">Set up payouts</button><button type="button" class="mc-btn mc-btn--ghost mc-btn--block">Browse missions first</button></div>`;
+document.getElementById("root").innerHTML = M.board([{title:"Academy", note:"5 modules, progress", html:list},{title:"Quiz", note:"Dark", theme:"dark", html:quiz},{title:"Certified", note:"Understated moment", html:cert}]);
+M.hydrate(document);
+
+</script>
+</body>
+</html>

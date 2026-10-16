@@ -1,0 +1,70 @@
+<!-- @dsCard group="App screens" height=960 width=884 subtitle="7 guided steps, sync indicator, Submit only when complete" -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>App — Visit checklist</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Public+Sans:ital,wght@0,400..700;1,400&display=swap">
+<style>html,body{margin:0;background:var(--surface-sunk)}</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+var M = window.MapCrew, I = M.icon;
+var back = function (t, right) { return `<div class="mc-appbar"><button type="button" class="mc-iconbtn" aria-label="Back">${I("arrow-left")}</button><span class="mc-appbar__title">${t}</span>${right || ""}</div>`; };
+
+var steps = [["check-in", "Check in", "Arrived 10:04 AM"], ["pen", "Consent signature", "Signed by the owner"], ["store", "Profile setup", "Created on the owner's phone"],
+  ["invite", "Manager invite", "Owner adds you as a manager"], ["camera", "Photos", "10 minimum, up to 15"], ["video", "Verification", "Video verification, if offered"], ["check-out", "Check out", "Confirm you're leaving"]];
+var checklist = function (doneN) {
+  return back("Visit in progress", `<span class="mc-sync" data-sync style="margin-right:8px">${I("cloud-check", "mc-ico--sm")} Synced</span>`) +
+  `<div style="padding:0 16px 12px"><div class="mc-between"><span class="body-s mc-muted">Fence contractor · Naperville</span><span class="body-s mc-num" data-count><b>${doneN}</b> of 7</span></div>
+   <div class="mc-progress" style="margin-top:8px"><span data-bar style="width:${doneN / 7 * 100}%"></span></div></div>
+  <div class="mc-scroll"><div class="mc-stepper" data-stepper>${steps.map(function (st, i) {
+    var state = i < doneN ? "done" : i === doneN ? "current" : "todo";
+    return `<button type="button" class="mc-step" data-i="${i}" data-state="${state}" aria-label="${st[1]}"><span class="mc-step__dot">${state === "done" ? I("check", "mc-ico--sm") : i + 1}</span><span><span class="mc-step__title">${st[1]}</span><br><span class="mc-step__meta">${st[2]}</span></span><span class="mc-step__status">${state === "done" ? "Done" : state === "current" ? "Now" : ""}</span></button>` +
+      (i === 3 ? `<div class="mc-step__panel" data-panel="3" ${state === "current" ? "" : "hidden"}><p class="body-s">Ask the owner to add <b>agents@yourdomain.com</b> as a manager in their profile settings, so we can confirm it goes live. They can remove it anytime.</p><button type="button" class="mc-btn mc-btn--dark mc-btn--sm" style="margin-top:12px" data-done="3">${I("check", "mc-ico--sm")} Owner sent the invite</button></div>` : "");
+  }).join("")}</div>
+  <p class="body-s mc-muted" style="margin-top:12px">Tip: tap a step to mark it done in this preview.</p></div>
+  <div class="mc-bottom"><button type="button" class="mc-btn mc-btn--primary mc-btn--lg mc-btn--block" data-submit ${doneN < 7 ? "disabled" : ""}>Submit visit</button><p class="body-s mc-muted" style="text-align:center" data-left>Finish ${7 - doneN} more steps to submit</p></div>`;
+};
+var cats = [["Logo", 1, 1], ["Truck", 2, 2], ["Team", 1, 2], ["Equipment", 2, 3], ["Past jobs", 3, 4]];
+var photos = back("Photos", `<span class="mc-sync mc-sync--offline" style="margin-right:8px">${I("wifi-off", "mc-ico--sm")} Offline</span>`) +
+  `<div class="mc-scroll" style="padding-top:4px">
+  <div class="mc-between"><h1 class="h2"><span class="mc-num">9</span> of 10 minimum</h1><span class="body-s mc-muted">up to 15</span></div>
+  <div class="mc-progress" style="margin-top:10px"><span style="width:90%"></span></div>
+  <div class="mc-chips" style="margin-top:16px">${cats.map(function (c) { var ok = c[1] >= c[2]; return `<span class="mc-badge ${ok ? "mc-badge--success" : "mc-badge--outline"}" style="height:32px;text-transform:none;letter-spacing:0;font-size:13px">${ok ? I("check") : ""}${c[0]} <span class="mc-num">${c[1]}/${c[2]}</span></span>`; }).join("")}</div>
+  <div class="mc-slots" style="margin-top:16px">
+    ${["Logo", "Truck", "Truck", "Team", "Equip.", "Equip.", "Job", "Job", "Job"].map(function (l) { return `<div class="mc-slot" data-filled role="img" aria-label="${l} photo"><span class="mc-slot__lbl">${l}</span></div>`; }).join("")}
+    <button type="button" class="mc-slot mc-slot--add">${I("camera", "mc-ico--lg")}Team</button>
+    <button type="button" class="mc-slot mc-slot--add">${I("plus", "mc-ico--lg")}Past job</button>
+    <div class="mc-slot" aria-hidden="true"></div>
+  </div>
+  <div class="mc-card mc-card--sunk" style="margin-top:16px;display:flex;gap:12px">${I("info")}<p class="body-s">Shoot in daylight, landscape. Ask before photographing anyone, and skip customers' homes or house numbers.</p></div>
+  <div style="margin-top:16px">${M.toastHTML("You're offline. 9 photos are saved on this phone and will upload when you reconnect.", { tone: "offline", icon: "wifi-off" })}</div>
+</div>
+<div class="mc-bottom"><button type="button" class="mc-btn mc-btn--primary mc-btn--lg mc-btn--block" disabled>Add 1 more photo</button></div>`;
+document.getElementById("root").innerHTML = M.board([{title:"Visit checklist", note:"Interactive: tap steps", html:checklist(3)},{title:"Photos step", note:"Dark, offline", theme:"dark", html:photos}]);
+M.hydrate(document);
+
+var ph = document.querySelector(".mc-phone"), done = 3;
+function render() {
+  ph.querySelectorAll("[data-stepper] .mc-step").forEach(function (b) {
+    var i = +b.getAttribute("data-i"), st = i < done ? "done" : i === done ? "current" : "todo";
+    b.setAttribute("data-state", st);
+    b.querySelector(".mc-step__dot").innerHTML = st === "done" ? I("check", "mc-ico--sm") : i + 1;
+    b.querySelector(".mc-step__status").textContent = st === "done" ? "Done" : st === "current" ? "Now" : "";
+  });
+  var p = ph.querySelector("[data-panel]"); p.hidden = done !== 3;
+  ph.querySelector("[data-bar]").style.width = (done / 7 * 100) + "%";
+  ph.querySelector("[data-count]").innerHTML = "<b>" + done + "</b> of 7";
+  var sub = ph.querySelector("[data-submit]"); sub.disabled = done < 7;
+  ph.querySelector("[data-left]").textContent = done < 7 ? "Finish " + (7 - done) + " more step" + (7 - done > 1 ? "s" : "") + " to submit" : "All 7 steps done. Ready to submit.";
+}
+ph.querySelectorAll("[data-stepper] .mc-step").forEach(function (b) { b.addEventListener("click", function () { var i = +b.getAttribute("data-i"); done = i < done ? i : i + 1; render(); }); });
+ph.querySelector("[data-done]").addEventListener("click", function () { done = 4; render(); });
+
+</script>
+</body>
+</html>

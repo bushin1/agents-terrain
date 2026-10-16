@@ -1,0 +1,25 @@
+<!-- @dsCard group="Landing page" height=3700 width=1318 subtitle="Mobile first: the page continues left to right across three columns" -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Landing — mobile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Public+Sans:ital,wght@0,400..700;1,400&display=swap">
+<style>html,body{margin:0;background:var(--surface-sunk)}</style>
+</head>
+<body>
+<div class="mc mc-board" data-theme="light" style="gap:32px">
+ <div class="mc-board__col"><div class="mc-board__cap"><b>Mobile · 390</b><span>· 1 Hero, How it works, Pay</span></div><div id="c1" style="width:390px;border-radius:28px;overflow:hidden;box-shadow:var(--shadow-raised);background:var(--paper)"></div></div>
+ <div class="mc-board__col"><div class="mc-board__cap"><b>Mobile · 390</b><span>· 2 Visit, Who, Safety</span></div><div id="c2" style="width:390px;border-radius:28px;overflow:hidden;box-shadow:var(--shadow-raised);background:var(--paper)"></div></div>
+ <div class="mc-board__col"><div class="mc-board__cap"><b>Mobile · 390</b><span>· 3 FAQ, Final CTA, Footer</span></div><div id="c3" style="width:390px;border-radius:28px;overflow:hidden;box-shadow:var(--shadow-raised);background:var(--paper)"></div></div>
+</div>
+<script>
+var M = window.MapCrew;
+M.renderLanding(document.getElementById("c1"), ["nav", "hero", "how", "pay"]);
+M.renderLanding(document.getElementById("c2"), ["visit", "who", "trust"]);
+M.renderLanding(document.getElementById("c3"), ["faq", "footer"]);
+</script>
+</body>
+</html>

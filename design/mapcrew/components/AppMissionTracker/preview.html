@@ -1,0 +1,44 @@
+<!-- @dsCard group="App screens" height=960 width=884 subtitle="The 3 payout steps as a progress line" -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>App — Mission tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Public+Sans:ital,wght@0,400..700;1,400&display=swap">
+<style>html,body{margin:0;background:var(--surface-sunk)}</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+var M = window.MapCrew, I = M.icon;
+var back = function (t, right) { return `<div class="mc-appbar"><button type="button" class="mc-iconbtn" aria-label="Back">${I("arrow-left")}</button><span class="mc-appbar__title">${t}</span>${right || ""}</div>`; };
+
+var tracker = function (o) {
+  var items = [["Visit validated", "$40", o.s1, o.s1 === "done" ? "Validated " + o.d1 + " · in Friday's payout" : "Our team is reviewing your checklist"],
+    ["Profile live", "+$25", o.s2, o.s2 === "done" ? "Live since " + o.d2 + " · in Friday's payout" : "Waiting for the owner to finish verification. We check every day."],
+    ["Became customer", "+$50", o.s3, o.s3 === "done" ? "Signed up " + o.d3 : "Only if the owner decides to sign up. Our team follows up for [follow-up window placeholder]."]];
+  var dot = function (s) { return s === "done" ? I("check") : s === "pending" ? I("clock") : I("clock"); };
+  return back(o.title) + `<div class="mc-scroll" style="padding-top:8px">
+  <div class="mc-row" style="gap:12px"><span class="mc-trade">${I(o.icon)}</span><div><div class="h3">${o.title}</div><div class="body-s mc-muted">${o.city} · visited ${o.visited}</div></div></div>
+  <div class="mc-card" style="margin-top:20px"><div class="mc-between"><span class="body-s mc-muted">Earned so far</span><span class="body-s mc-muted">of up to $115</span></div>
+    <div class="mc-between" style="margin-top:2px"><span class="money-l">${o.earned}</span>${o.level ? `<span class="mc-level mc-level--silver">Silver +10%</span>` : ""}</div>
+    <div class="mc-pline" style="margin-top:12px" aria-hidden="true">${items.map(function (x) { return `<i data-state="${x[2]}"></i>`; }).join("")}</div></div>
+  <h2 class="h3" style="margin:24px 0 16px">Payout steps</h2>
+  <ol class="mc-track">${items.map(function (x) {
+    var badge = x[2] === "done" ? `<span class="mc-badge mc-badge--success">${I("check")} Earned</span>` : x[2] === "pending" ? `<span class="mc-badge mc-badge--pending">${I("clock")} Pending</span>` : `<span class="mc-badge mc-badge--outline">Waiting</span>`;
+    return `<li class="mc-track__item" data-state="${x[2]}"><span class="mc-track__dot">${dot(x[2])}</span><div><div class="mc-row"><b>${x[0]}</b></div><p class="body-s mc-muted" style="margin-top:2px">${x[3]}</p><div style="margin-top:8px">${badge}</div></div><span class="mc-track__amt">${x[1]}</span></li>`; }).join("")}</ol>
+  <h2 class="h3" style="margin:28px 0 8px">Activity</h2>
+  <ul class="mc-list">${o.log.map(function (l) { return `<li><span class="body-s mc-muted mc-num" style="width:56px">${l[0]}</span><span style="flex:1;font-size:15px">${l[1]}</span></li>`; }).join("")}</ul>
+  <button type="button" class="mc-btn mc-btn--secondary mc-btn--block" style="margin-top:16px">${I("chat")} Something wrong? Message support</button>
+</div>`;
+};
+var a = tracker({ title: "Fence contractor", icon: "fence", city: "Naperville, IL", visited: "Oct 20", earned: "$40.00", s1: "done", d1: "Oct 21", s2: "pending", s3: "waiting", log: [["Oct 21", "Visit validated — $40 added"], ["Oct 20", "Visit submitted, 12 photos"], ["Oct 20", "Checked in at 10:04 AM"]] });
+var b = tracker({ title: "Concrete contractor", icon: "brick", city: "Aurora, IL", visited: "Oct 6", earned: "$71.50", level: true, s1: "done", d1: "Oct 7", s2: "done", d2: "Oct 12", s3: "pending", log: [["Oct 12", "Profile live — $27.50 added"], ["Oct 7", "Visit validated — $44 added"], ["Oct 6", "Visit submitted, 14 photos"]] });
+document.getElementById("root").innerHTML = M.board([{title:"Mission tracker", note:"Step 1 of 3 paid", html:a},{title:"Mission tracker", note:"Dark, Silver level", theme:"dark", html:b}]);
+M.hydrate(document);
+
+</script>
+</body>
+</html>

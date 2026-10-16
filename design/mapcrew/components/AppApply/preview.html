@@ -1,0 +1,62 @@
+<!-- @dsCard group="App screens" height=960 width=1314 subtitle="Multi-step form with progress bar, then SMS code" -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>App — Apply</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Public+Sans:ital,wght@0,400..700;1,400&display=swap">
+<style>html,body{margin:0;background:var(--surface-sunk)}</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+var M = window.MapCrew, I = M.icon;
+var back = function (t, right) { return `<div class="mc-appbar"><button type="button" class="mc-iconbtn" aria-label="Back">${I("arrow-left")}</button><span class="mc-appbar__title">${t}</span>${right || ""}</div>`; };
+
+var head = function (n) { return back("Apply", `<span class="body-s mc-muted mc-num" style="padding-right:12px">${n} of 6</span>`) +
+  `<div style="padding:0 16px"><div class="mc-progress" role="progressbar" aria-label="Step ${n} of 6" aria-valuemin="0" aria-valuemax="6" aria-valuenow="${n}"><span style="width:${n / 6 * 100}%"></span></div></div>`; };
+var dob = head(3) + `<div class="mc-scroll" style="padding-top:28px">
+  <p class="overline mc-accent-text">About you</p>
+  <h1 class="h1" style="margin-top:8px">When were you born?</h1>
+  <p class="mc-muted" style="margin-top:8px">${M.brand.name} agents must be 18 or older.</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:8px;margin-top:28px">
+    <div class="mc-field"><label class="mc-label" for="m">Month</label><input class="mc-input mc-num" id="m" inputmode="numeric" value="04"></div>
+    <div class="mc-field"><label class="mc-label" for="d">Day</label><input class="mc-input mc-num" id="d" inputmode="numeric" value="17"></div>
+    <div class="mc-field"><label class="mc-label" for="y">Year</label><input class="mc-input mc-num" id="y" inputmode="numeric" value="2005"></div>
+  </div>
+  <div class="mc-card mc-card--sunk" style="margin-top:24px;display:flex;gap:12px">${I("id")}<p class="body-s">We'll confirm your age with a photo ID before your first mission. It's also why you'll sign an independent contractor agreement.</p></div>
+</div>
+<div class="mc-bottom"><button type="button" class="mc-btn mc-btn--primary mc-btn--lg mc-btn--block">Continue</button></div>`;
+var where = head(4) + `<div class="mc-scroll" style="padding-top:28px">
+  <p class="overline mc-accent-text">Where you'll work</p>
+  <h1 class="h1" style="margin-top:8px">Where can you work?</h1>
+  <p class="mc-muted" style="margin-top:8px">We only show missions inside your radius.</p>
+  <div class="mc-stack" style="gap:24px;margin-top:28px">
+    <div class="mc-field"><label class="mc-label" for="zip">Home ZIP code</label><input class="mc-input mc-num" id="zip" inputmode="numeric" value="60540" aria-describedby="zip-h"><span class="mc-help" id="zip-h">Used to find missions near you. Never shown to businesses.</span></div>
+    <div class="mc-field"><span class="mc-label" id="rad">How far will you travel?</span><div class="mc-chips" role="radiogroup" aria-labelledby="rad" data-chips>
+      <button type="button" class="mc-chip" role="radio" aria-checked="false">5 mi</button><button type="button" class="mc-chip" role="radio" aria-checked="true">10 mi</button><button type="button" class="mc-chip" role="radio" aria-checked="false">15 mi</button><button type="button" class="mc-chip" role="radio" aria-checked="false">25 mi</button></div></div>
+    <div class="mc-field"><span class="mc-label" id="car">Do you have a car?</span><div class="mc-seg" role="group" aria-labelledby="car" data-seg>
+      <button type="button" aria-pressed="false">${I("car", "mc-ico--sm")} Yes</button><button type="button" aria-pressed="true">Sometimes</button><button type="button" aria-pressed="false">No</button></div>
+      <span class="mc-help">No car is fine — you'll see missions you can reach by bike or transit.</span></div>
+  </div>
+</div>
+<div class="mc-bottom"><button type="button" class="mc-btn mc-btn--primary mc-btn--lg mc-btn--block">Continue</button><p class="body-s mc-muted" style="text-align:center">Next: when you're usually free</p></div>`;
+var sms = back("Verify your phone") + `<div class="mc-scroll" style="padding-top:20px">
+  <span class="mc-trade" style="width:56px;height:56px;border-radius:18px">${I("phone", "mc-ico--lg")}</span>
+  <h1 class="h1" style="margin-top:20px">Check your texts</h1>
+  <p class="mc-muted" style="margin-top:8px">We sent a 6-digit code to <b style="color:var(--ink)" class="mc-num">(630) •••-0142</b>.</p>
+  <div class="mc-field" style="margin-top:28px"><label class="mc-label" for="o1">Verification code</label>
+  <div class="mc-otp"><input id="o1" value="4" aria-label="Digit 1"><input value="8" aria-label="Digit 2"><input value="1" aria-label="Digit 3"><input value="" aria-label="Digit 4" style="border-color:var(--ink);box-shadow:0 0 0 3px var(--signal-soft)"><input aria-label="Digit 5"><input aria-label="Digit 6"></div></div>
+  <div class="mc-stack" style="margin-top:24px;gap:4px"><button type="button" class="mc-btn mc-btn--ghost" style="justify-content:flex-start;padding:0">Didn't get it? <span class="mc-accent-text">&nbsp;Resend code</span></button>
+  <button type="button" class="mc-btn mc-btn--ghost" style="justify-content:flex-start;padding:0">Wrong number? <span class="mc-accent-text">&nbsp;Edit</span></button></div>
+  <p class="body-s mc-muted" style="margin-top:16px">Message and data rates may apply. We only text you about your account and missions.</p>
+</div>
+<div class="mc-bottom"><button type="button" class="mc-btn mc-btn--primary mc-btn--lg mc-btn--block" disabled>Verify</button><p class="body-s mc-muted" style="text-align:center">Enter all 6 digits to continue</p></div>`;
+document.getElementById("root").innerHTML = M.board([{title:"Apply · step 3", note:"Date of birth, 18+", html:dob},{title:"Apply · step 4", note:"ZIP, radius, car", html:where},{title:"SMS verification", note:"Dark", theme:"dark", html:sms}]);
+M.hydrate(document);
+
+</script>
+</body>
+</html>

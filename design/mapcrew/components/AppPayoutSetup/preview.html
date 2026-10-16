@@ -1,0 +1,50 @@
+<!-- @dsCard group="App screens" height=960 width=1314 subtitle="Agreement summary, Stripe hand-off, confirmation" -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>App — Get paid setup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Public+Sans:ital,wght@0,400..700;1,400&display=swap">
+<style>html,body{margin:0;background:var(--surface-sunk)}</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+var M = window.MapCrew, I = M.icon;
+var back = function (t, right) { return `<div class="mc-appbar"><button type="button" class="mc-iconbtn" aria-label="Back">${I("arrow-left")}</button><span class="mc-appbar__title">${t}</span>${right || ""}</div>`; };
+
+var stepsHead = function (a) { return `<div style="padding:0 16px 8px;display:flex;gap:8px"><span class="mc-badge ${a > 1 ? "mc-badge--success" : "mc-badge--bonus"}">${a > 1 ? I("check") : ""} 1 Agreement</span><span class="mc-badge ${a === 2 ? "mc-badge--bonus" : a > 2 ? "mc-badge--success" : "mc-badge--outline"}">${a > 2 ? I("check") : ""} 2 Payouts</span></div>`; };
+var ag = back("Get paid") + stepsHead(1) + `<div class="mc-scroll" style="padding-top:16px">
+  <h1 class="h1">Your contractor agreement, in plain English</h1>
+  <ul class="mc-card" style="margin-top:16px;display:flex;flex-direction:column;gap:12px">
+    ${["You're an independent contractor, not an employee.", "We pay $40, +$25 and +$50 per business as each step is validated.", "You handle your own taxes. We send a 1099-NEC when required.", "You never handle owners' passwords and never write or ask for reviews.", "Either of us can end it at any time."].map(function (t) { return `<li class="mc-row" style="align-items:flex-start;gap:12px"><span style="color:var(--success)">${I("check")}</span><span class="body-s" style="font-size:15px;line-height:22px">${t}</span></li>`; }).join("")}
+  </ul>
+  <a class="mc-link mc-row" href="#" style="margin-top:16px;min-height:44px;text-decoration:none">${I("external", "mc-ico--sm")} Read the full agreement (6 pages)</a>
+  <div class="mc-field" style="margin-top:8px"><label class="mc-label" for="sig">Type your full legal name to sign</label><input class="mc-input" id="sig" value="Maya R. Thompson" style="font-family:var(--font-display);font-size:19px"></div>
+  <label class="mc-check" style="margin-top:16px"><input type="checkbox" checked><span class="body-s" style="font-size:15px">I've read the agreement and I'm 18 or older.</span></label>
+</div>
+<div class="mc-bottom"><button type="button" class="mc-btn mc-btn--primary mc-btn--lg mc-btn--block">Sign and continue</button></div>`;
+var stripe = back("Get paid") + stepsHead(2) + `<div class="mc-scroll" style="padding-top:16px">
+  <h1 class="h1">Connect payouts with Stripe</h1>
+  <p class="mc-muted" style="margin-top:8px">Stripe is the payment company that sends your Friday payouts. You'll leave ${M.brand.name} for about 3 minutes, then come right back.</p>
+  <div class="mc-card" style="margin-top:20px"><p class="overline mc-muted">Stripe will ask for</p>
+    <ul style="margin-top:12px;display:flex;flex-direction:column;gap:12px">${[["user", "Legal name, date of birth, address"], ["id", "Last 4 of your SSN (sometimes the full number)"], ["bank", "A bank account or debit card for payouts"]].map(function (x) { return `<li class="mc-row" style="gap:12px">${I(x[0])}<span style="font-size:15px">${x[1]}</span></li>`; }).join("")}</ul></div>
+  <div class="mc-card mc-card--sunk" style="margin-top:12px;display:flex;gap:12px">${I("lock")}<p class="body-s"><b>What we see:</b> whether payouts are set up and the last 4 digits of your account. Never your full bank details or SSN.</p></div>
+</div>
+<div class="mc-bottom"><button type="button" class="mc-btn mc-btn--primary mc-btn--lg mc-btn--block">Continue to Stripe ${I("external")}</button><p class="body-s mc-muted" style="text-align:center">Payments are processed by Stripe, Inc.</p></div>`;
+var done = back("Get paid") + stepsHead(3) + `<div class="mc-scroll" style="padding-top:24px">
+  <span class="mc-trade" style="width:56px;height:56px;border-radius:18px;background:var(--success-soft);color:var(--success)">${I("check", "mc-ico--lg")}</span>
+  <h1 class="h1" style="margin-top:20px">Payouts connected</h1>
+  <p class="mc-muted" style="margin-top:8px">Every Friday, validated payments go to <b style="color:var(--ink)" class="mc-num">Bank ••••4821</b>.</p>
+  <div class="mc-card" style="margin-top:24px"><div class="mc-kv"><div><span class="k">Payout day</span><span class="v">Every Friday</span></div><div><span class="k">Sent to</span><span class="v">Bank ••••4821</span></div><div><span class="k">Fees to you</span><span class="v">$0</span></div><div><span class="k">Tax form</span><span class="v">1099-NEC via Stripe</span></div></div></div>
+  <button type="button" class="mc-btn mc-btn--ghost" style="margin-top:8px;padding:0">Change payout account</button>
+</div>
+<div class="mc-bottom"><button type="button" class="mc-btn mc-btn--primary mc-btn--lg mc-btn--block">Find your first mission</button></div>`;
+document.getElementById("root").innerHTML = M.board([{title:"Contractor agreement", html:ag},{title:"Stripe hand-off", note:"Explained simply", html:stripe},{title:"Connected", note:"Dark", theme:"dark", html:done}]);
+M.hydrate(document);
+
+</script>
+</body>
+</html>
