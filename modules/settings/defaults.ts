@@ -14,6 +14,7 @@ export const SettingsSchema = z.object({
     .refine((levels) => levels.some((l) => l.minValidated === 0), 'Un niveau doit commencer à 0 mission'),
   widenRadiusMiles: z.number().int().min(1).max(200),
   quickTask: z.object({
+    levelCents: z.object({ STARTER: cents, BRONZE: cents, SILVER: cents, GOLD: cents }),
     starterMaxPerDay: z.number().int().min(1).max(50),
     bronzeMaxPerDay: z.number().int().min(1).max(50),
     silverMaxPerDay: z.number().int().min(1).max(50),
@@ -29,14 +30,15 @@ export const SettingsSchema = z.object({
 export type Settings = z.infer<typeof SettingsSchema>
 
 export const DEFAULT_SETTINGS: Settings = {
-  tierAmountsCents: { VISIT: 4000, LIVE: 2500, CLIENT: 5000, RETURN_VISIT: 2000, QUICK_TASK: 300 },
+  tierAmountsCents: { VISIT: 4000, LIVE: 2500, CLIENT: 5000, RETURN_VISIT: 2000, QUICK_TASK: 200 },
   levels: [
-    { name: 'BRONZE', minValidated: 0, bonusPct: 0 },
-    { name: 'SILVER', minValidated: 5, bonusPct: 10 },
-    { name: 'GOLD', minValidated: 15, bonusPct: 20 },
+    { name: 'BRONZE', minValidated: 10, bonusPct: 0 },
+    { name: 'SILVER', minValidated: 30, bonusPct: 0 },
+    { name: 'GOLD', minValidated: 100, bonusPct: 0 },
   ],
   widenRadiusMiles: 50,
   quickTask: {
+    levelCents: { STARTER: 200, BRONZE: 300, SILVER: 400, GOLD: 500 },
     starterMaxPerDay: 3,
     bronzeMaxPerDay: 5,
     silverMaxPerDay: 10,
@@ -45,6 +47,6 @@ export const DEFAULT_SETTINGS: Settings = {
     survivalCheckDays: 14,
     expirationHours: 2,
     cooldownMinutes: 15,
-    cashoutThresholdCents: 3000,
+    cashoutThresholdCents: 2000,
   },
 }

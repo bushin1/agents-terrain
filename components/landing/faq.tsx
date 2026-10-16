@@ -1,25 +1,23 @@
 import type { ReactNode } from 'react'
 import { Icon } from '@/components/mc/icons'
-import { BRAND_ADDRESS, BRAND_LEGAL, BRAND_SUPPORT, independenceLine } from '@/lib/brand'
+import { BRAND_ADDRESS, BRAND_LEGAL, BRAND_SUPPORT, independenceLineFr } from '@/lib/brand'
 
-// Questions franches, la première sur le paiement. Port de MapCrew.landing.faq.
 export function Faq() {
   const items: { q: string; a: ReactNode }[] = [
-    { q: 'When do I get paid?', a: <><p>Every Friday, via Stripe, for every payment step validated by [cutoff day and time placeholder]. Money goes to the bank account or debit card you connect.</p><p>Your first payout can take a few extra days while Stripe verifies your details.</p></> },
-    { q: 'Do I need a car?', a: <p>No. You set a travel radius and tell us whether you have a car; we only show missions you can reach. Some areas will have fewer missions without one.</p> },
-    // Pas d'avis ici (règle n° 2) : la maquette disait « paid for visits — never for reviews ».
-    { q: 'Is this legit?', a: <p>{`Yes, and you can check: ${BRAND_LEGAL} is a registered US company at ${BRAND_ADDRESS}. Every business agreed to the visit before it’s offered to you, you’re paid for the visit and the setup help you give, and it costs nothing to join. ${independenceLine()}`}</p> },
-    { q: 'How do taxes work (1099)?', a: <p>You’re an independent contractor, so we don’t withhold taxes. If your earnings pass the IRS reporting threshold, you’ll get a 1099-NEC through Stripe early the next year. Setting some money aside helps. This isn’t tax advice.</p> },
-    { q: 'What if the owner isn’t there?', a: <p>Check in on arrival so we know you made it, then tap “Owner not here”. Our team calls the business while you wait. If the visit can’t happen: [no-show policy placeholder].</p> },
-    { q: 'Why 18+?', a: <p>You’ll sign a contractor agreement, get paid through Stripe and visit businesses on your own. All of that requires you to be an adult.</p> },
+    { q: 'Quand suis-je payé ?', a: <><p>Chaque vendredi, via Stripe, pour tout avis approuvé avant [jour et heure limite à préciser]. L'argent va au compte bancaire ou à la carte de débit que vous connectez.</p><p>Votre premier virement peut prendre quelques jours supplémentaires pendant que Stripe vérifie vos informations.</p></> },
+    { q: 'Dois-je avoir une voiture ?', a: <p>Non. Vous indiquez votre rayon de déplacement et si vous avez un véhicule — nous ne vous montrons que les missions accessibles. Certaines zones offrent moins de missions sans voiture.</p> },
+    { q: 'Est-ce légal et conforme ?', a: <p>{`Oui. Vous vous rendez physiquement au commerce et partagez votre vraie expérience — exactement comme un client ordinaire qui rédige un avis. ${independenceLineFr()} ${BRAND_LEGAL} est une entreprise enregistrée au ${BRAND_ADDRESS}.`}</p> },
+    { q: 'Comment fonctionne la fiscalité ?', a: <p>Vous êtes travailleur autonome : nous ne retenons aucun impôt. Si vos revenus dépassent le seuil de déclaration applicable, vous recevrez les documents fiscaux requis via Stripe en début d'année suivante. Ce n'est pas un conseil fiscal.</p> },
+    { q: 'Que se passe-t-il si le commerce est fermé ?', a: <p>Signalez-le dans l'application. Vous n'êtes pas pénalisé pour une fermeture imprévue. [Politique d'annulation à préciser]</p> },
+    { q: 'Pourquoi 18 ans et plus ?', a: <p>Vous signez un contrat de travailleur autonome et êtes payé via Stripe. Les deux exigent d'être majeur.</p> },
   ]
   return (
     <section className="lp-sec" id="faq" aria-labelledby="faq-h">
       <div className="lp-wrap lp-faq__grid">
         <div>
           <p className="lp-eyebrow">FAQ</p>
-          <h2 className="lp-h2" id="faq-h">Fair questions.</h2>
-          <p className="lp-lede">{`Still unsure? Write to ${BRAND_SUPPORT} — a person answers.`}</p>
+          <h2 className="lp-h2" id="faq-h">Des questions légitimes.</h2>
+          <p className="lp-lede">{`Encore des doutes ? Écrivez à ${BRAND_SUPPORT} — un vrai humain vous répond.`}</p>
         </div>
         <div className="lp-faq">
           {items.map((item, i) => (

@@ -41,6 +41,7 @@ export function settingsFromForm(fd: FormData): { ok: true; value: Settings } | 
     levels: LEVEL_NAMES.map((name, i) => ({ name, minValidated: int(`level_${i}_minValidated`), bonusPct: int(`level_${i}_bonusPct`) })),
     widenRadiusMiles: int('widenRadiusMiles'),
     quickTask: {
+      levelCents: { STARTER: cents('qt_lc_STARTER'), BRONZE: cents('qt_lc_BRONZE'), SILVER: cents('qt_lc_SILVER'), GOLD: cents('qt_lc_GOLD') },
       starterMaxPerDay: int('qt_starterMaxPerDay'),
       bronzeMaxPerDay: int('qt_bronzeMaxPerDay'),
       silverMaxPerDay: int('qt_silverMaxPerDay'),

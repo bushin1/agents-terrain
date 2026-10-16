@@ -2,8 +2,6 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '@/components/mc/icons'
 
-// Barre « Apply » collée en bas de l'écran sur mobile : elle apparaît quand les boutons du haut ne sont plus
-// visibles, et disparaît sur l'appel final (qui a déjà son bouton). Masquée en desktop par le CSS.
 export function StickyApply() {
   const [show, setShow] = useState(false)
   useEffect(() => {
@@ -25,7 +23,7 @@ export function StickyApply() {
   return (
     <div className="lp-sticky" data-show={show ? 'true' : 'false'}>
       <a className="mc-btn mc-btn--primary mc-btn--lg mc-btn--block" href="/apply" tabIndex={show ? 0 : -1}>
-        Apply in 5 minutes <Icon name="arrow-right" />
+        Postuler en 5 minutes <Icon name="arrow-right" />
       </a>
     </div>
   )

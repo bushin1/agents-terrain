@@ -10,6 +10,7 @@ import {
 } from './task-rule'
 
 const QT_SETTINGS = {
+  levelCents: { STARTER: 200, BRONZE: 300, SILVER: 400, GOLD: 500 },
   starterMaxPerDay: 3,
   bronzeMaxPerDay: 5,
   silverMaxPerDay: 10,

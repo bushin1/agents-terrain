@@ -155,6 +155,8 @@ export async function verifyTask(db: PrismaClient, taskId: string, approved: boo
   ]
 
   if (approved) {
+    const levelKey = task.agent.level as keyof typeof settings.quickTask.levelCents
+    const amountCents = settings.quickTask.levelCents[levelKey] ?? settings.quickTask.levelCents.STARTER
     ops.push(
       db.reviewTarget.update({ where: { id: task.targetId }, data: { reviewCount: { increment: 1 }, lastReviewAt: now } }),
       db.earning.create({
@@ -162,9 +164,9 @@ export async function verifyTask(db: PrismaClient, taskId: string, approved: boo
           agentId: task.agentId,
           missionId: task.missionId,
           tier: 'QUICK_TASK',
-          baseAmountCents: settings.tierAmountsCents.QUICK_TASK,
+          baseAmountCents: amountCents,
           levelBonusPct: 0,
-          amountCents: settings.tierAmountsCents.QUICK_TASK,
+          amountCents,
         },
       }),
     )

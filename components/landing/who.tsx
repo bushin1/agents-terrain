@@ -1,21 +1,19 @@
 import { Scene, type SceneName } from './illustrations'
 
-// Pour qui. Les témoignages restent des placeholders tant qu'aucun agent réel n'a accepté d'être cité
-// (règle de contenu n° 3 : jamais de citation inventée). Port de MapCrew.landing.who.
-export const TESTIMONIAL_PLACEHOLDER = '[Testimonial placeholder — real agent quote, with permission]'
+export const TESTIMONIAL_PLACEHOLDER = "[Témoignage à venir — citation d'un vrai agent, avec permission]"
 
 const PERSONAS: [string, string, string, SceneName][] = [
-  ['Students', 'Fit visits between classes. Pick a mission, go, be back for your 2 PM.', 'Agent with a backpack talking with a concrete contractor beside a mixer truck', 'student'],
-  ['Parents', 'Daytime only, during school hours, close to home. No quotas, no minimums.', 'Agent and tree-service owner looking at photos next to a chipper', 'parent'],
-  ['Gig workers', 'Pay per mission is fixed and shown up front, with distance. Payouts every Friday.', 'Agent photographing a roofing crew’s truck in a driveway', 'gig'],
+  ["Étudiants", "Faites une mission entre deux cours. Choisissez un commerce proche, allez-y, rédigez votre avis, rentrez.", "Agent avec un sac à dos qui parle à un gérant de commerce", 'student'],
+  ["Parents", "Des missions en journée, près de chez vous, pendant les heures d'école. Aucun quota, aucun minimum.", "Agent qui discute avec le propriétaire d'un commerce de proximité", 'parent'],
+  ["Travailleurs à la pige", "Rémunération fixe affichée avant chaque mission, distance incluse. Versement chaque vendredi.", "Agent qui prend des notes dans un commerce local", 'gig'],
 ]
 
 export function Who() {
   return (
     <section className="lp-sec lp-sec--sunk" aria-labelledby="who-h">
       <div className="lp-wrap">
-        <p className="lp-eyebrow">Who it’s for</p>
-        <h2 className="lp-h2" id="who-h">Flexible work for people with a phone and a free morning.</h2>
+        <p className="lp-eyebrow">Pour qui</p>
+        <h2 className="lp-h2" id="who-h">Un revenu flexible pour ceux qui ont un téléphone et une matinée libre.</h2>
         <div className="lp-who">
           {PERSONAS.map(([title, text, brief, scene]) => (
             <article className="lp-persona" key={title}>
@@ -29,7 +27,7 @@ export function Who() {
           ))}
         </div>
         <div className="lp-pills">
-          {['No experience needed', 'No quotas', 'You set your radius', '18+ only'].map((pill) => (
+          {["Aucune expérience requise", "Aucun quota", "Vous choisissez votre rayon", "18 ans et plus"].map((pill) => (
             <span className="mc-badge mc-badge--outline" key={pill}>{pill}</span>
           ))}
         </div>

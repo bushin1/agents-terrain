@@ -13,6 +13,11 @@ export function independenceLine(): string {
   return `${BRAND_NAME} is an independent company, not affiliated with Google.`
 }
 
+/** Version française de la ligne d'indépendance — pages en français. */
+export function independenceLineFr(): string {
+  return `${BRAND_NAME} est une entreprise indépendante, sans aucun lien avec Google.`
+}
+
 export function managerInviteEmail(): string {
   return process.env.MANAGER_INVITE_EMAIL || 'manager@example.com'
 }

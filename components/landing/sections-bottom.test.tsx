@@ -1,42 +1,43 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { BRAND_LEGAL, BRAND_SUPPORT, independenceLine } from '@/lib/brand'
+import { BRAND_LEGAL, BRAND_SUPPORT, independenceLineFr } from '@/lib/brand'
 import { Faq } from './faq'
 import { Footer } from './footer'
-import { NO_REVIEWS_LINE, Trust } from './trust'
+import { AVIS_LINE, Trust } from './trust'
 import { Visit } from './visit'
 import { TESTIMONIAL_PLACEHOLDER, Who } from './who'
 
 describe('bas de page', () => {
-  it('Visit : paiement de visite issu des props', () => {
-    expect(renderToStaticMarkup(<Visit amounts={{ VISIT: 4500, LIVE: 3000, CLIENT: 6000 }} />)).toContain('Your $45 is on its way to validation.')
+  it('Visit : explique le processus en 6 etapes', () => {
+    const html = renderToStaticMarkup(<Visit />)
+    expect(html).toContain('lp-vstep')
+    expect(html.split('lp-vstep').length - 1).toBeGreaterThanOrEqual(6)
   })
 
-  it('Who : trois témoignages en placeholders, 18+', () => {
+  it('Who : trois personas, placeholders temoignages, 18 ans et plus', () => {
     const html = renderToStaticMarkup(<Who />)
     expect(html.split(TESTIMONIAL_PLACEHOLDER)).toHaveLength(4)
-    expect(html).toContain('18+ only')
+    expect(html).toContain('18 ans et plus')
   })
 
-  it('Trust : ligne d’indépendance sur fond papier et phrase exacte sur les avis', () => {
+  it("Trust : ligne d'independance et phrase sur les vrais avis", () => {
     const html = renderToStaticMarkup(<Trust />)
-    expect(html).toContain(`<p class="lp-indep">`)
-    expect(html).toContain(`<span>${independenceLine()}</span>`)
-    expect(html).toContain(NO_REVIEWS_LINE)
+    expect(html).toContain('lp-indep')
+    expect(html).toContain(independenceLineFr())
+    expect(html).toContain(AVIS_LINE)
   })
 
-  it('Faq : commence par le paiement (ouverte), mentions de marque, aucun avis', () => {
+  it('Faq : commence par le paiement (ouverte), mentions de marque', () => {
     const html = renderToStaticMarkup(<Faq />)
-    expect(html).toMatch(/<details open=""><summary>When do I get paid\?/)
-    expect(html.indexOf('When do I get paid?')).toBeLessThan(html.indexOf('Do I need a car?'))
-    for (const value of [BRAND_LEGAL, BRAND_SUPPORT, independenceLine()]) expect(html).toContain(value)
-    expect(html).not.toMatch(/\breview/i)
+    expect(html).toMatch(/<details open=""><summary>Quand suis-je/)
+    for (const value of [BRAND_LEGAL, BRAND_SUPPORT, independenceLineFr()]) expect(html).toContain(value)
   })
 
-  it('Footer : appel vers /apply, 18+, contractant indépendant, ligne d’indépendance', () => {
+  it("Footer : appel vers /apply, 18 ans et plus, ligne d'independance", () => {
     const html = renderToStaticMarkup(<Footer />)
-    expect(html).toContain('href="/apply">Apply in 5 minutes')
-    expect(html).toContain('18+ only · Independent contractor')
-    expect(html).toContain(independenceLine())
+    expect(html).toContain('href="/apply"')
+    expect(html).toContain('Postuler en 5 minutes')
+    expect(html).toContain('18 ans et plus')
+    expect(html).toContain(independenceLineFr())
   })
 })

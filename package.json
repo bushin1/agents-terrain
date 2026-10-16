@@ -12,6 +12,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "seed:dev": "tsx scripts/seed-dev.ts",
+    "seed:demo": "tsx scripts/seed-demo.ts",
     "admin:add": "tsx scripts/add-admin.ts",
     "e2e": "playwright test"
   },
