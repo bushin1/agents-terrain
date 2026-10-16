@@ -59,7 +59,7 @@ export async function getAgent(agentId: string) {
   return prisma.agent.findUnique({
     where: { id: agentId },
     include: {
-      missions: { orderBy: { slotAt: 'desc' }, take: 50, include: { pro: { select: { businessName: true, city: true, state: true } } } },
+      missions: { orderBy: { slotAt: 'desc' }, take: 50, include: { pro: { select: { businessName: true, city: true, state: true, timeZone: true } } } },
       flags: { where: { resolved: false }, orderBy: { createdAt: 'desc' } },
       attempts: { orderBy: { createdAt: 'desc' }, take: 5 },
     },
