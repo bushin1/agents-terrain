@@ -1,0 +1,305 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ── Agents ─────────────────────────────────────────────────────────────────────
+
+enum AgentStatus {
+  APPLICANT
+  TRAINING
+  LOCKED
+  REFUSED
+  CERTIFIED
+  ACTIVE
+  SUSPENDED
+}
+
+model Agent {
+  id               String            @id @default(cuid())
+  firstName        String
+  lastName         String
+  email            String            @unique
+  phone            String            @unique // E.164 US
+  birthDate        DateTime          @db.Date
+  zip              String
+  lat              Float
+  lng              Float
+  radiusMiles      Int
+  hasCar           Boolean
+  availability     String[] // créneaux « mon-am », « mon-pm », … « sun-pm »
+  status           AgentStatus       @default(APPLICANT)
+  phoneVerifiedAt  DateTime?
+  failedAttempts   Int               @default(0)
+  lastAttemptAt    DateTime?
+  contractVersion  String?
+  contractSignedAt DateTime?
+  contractSignedName String? // nom légal tapé pour signer
+  contractIp       String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  attempts         TrainingAttempt[]
+  missions         Mission[]
+  earnings         Earning[]
+  flags            FraudFlag[]
+
+  @@index([status])
+}
+
+// Codes à usage unique envoyés par SMS (candidature et connexion). Seule l'empreinte est stockée.
+model OtpCode {
+  id        String    @id @default(cuid())
+  phone     String
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int       @default(0)
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([phone, createdAt])
+}
+
+model TrainingAttempt {
+  id        String   @id @default(cuid())
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id])
+  score     Int // pourcentage 0–100
+  passed    Boolean
+  answers   Json
+  createdAt DateTime @default(now())
+
+  @@index([agentId, createdAt])
+}
+
+// ── Pros et missions ───────────────────────────────────────────────────────────
+
+enum ProStatus {
+  TO_CALL
+  AGREED
+  MISSION_OPEN
+  VISITED
+  LISTING_LIVE
+  CLIENT
+  LOST
+}
+
+model Pro {
+  id              String    @id @default(cuid())
+  businessName    String
+  contactName     String?
+  phone           String // E.164 US
+  address         String
+  city            String
+  state           String // code à 2 lettres
+  zip             String
+  lat             Float?
+  lng             Float?
+  timeZone        String // IANA, ex. America/New_York
+  trade           String
+  status          ProStatus @default(TO_CALL)
+  notes           String?
+  existingPlaceId String? // fiche publique déjà existante avant la visite (à revendiquer)
+  lostReason      String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  missions        Mission[]
+
+  @@index([status])
+  @@index([phone])
+}
+
+enum MissionType {
+  VISIT
+  RETURN_VISIT
+}
+
+enum MissionStatus {
+  OPEN
+  ACCEPTED
+  SUBMITTED
+  NEEDS_FIX
+  VALIDATED
+  REJECTED
+  CANCELLED
+}
+
+model Mission {
+  id                   String        @id @default(cuid())
+  proId                String
+  pro                  Pro           @relation(fields: [proId], references: [id])
+  agentId              String?
+  agent                Agent?        @relation(fields: [agentId], references: [id])
+  type                 MissionType   @default(VISIT)
+  parentMissionId      String? // mission VISIT d'origine, pour une RETURN_VISIT
+  parentMission        Mission?      @relation("ReturnOf", fields: [parentMissionId], references: [id])
+  returnMissions       Mission[]     @relation("ReturnOf")
+  status               MissionStatus @default(OPEN)
+  slotAt               DateTime
+  publishedAt          DateTime      @default(now())
+  acceptedAt           DateTime?
+  submittedAt          DateTime?
+  validatedAt          DateTime?
+  needsFixAt           DateTime?
+  fixMessage           String?
+  rejectReason         String?
+  cancelReason         String?
+  broadcastRadiusMiles Int?
+  urgencyBonusCents    Int           @default(0)
+  suggestedCategory    String
+  instructions         String?
+  reminderSentAt       DateTime?
+  noShowSmsAt          DateTime?
+  postVisitSmsAt       DateTime?
+  proRating            Int?
+  proDenied            Boolean       @default(false)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  submission           Submission?
+  earnings             Earning[]
+  flags                FraudFlag[]
+
+  @@index([status, slotAt])
+  @@index([agentId, status])
+  @@index([proId])
+}
+
+// Données de la checklist. `steps` suit le schéma Zod de modules/missions/checklist-rule.ts.
+model Submission {
+  id        String   @id @default(cuid())
+  missionId String   @unique
+  mission   Mission  @relation(fields: [missionId], references: [id])
+  steps     Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  photos    Photo[]
+}
+
+enum PhotoCategory {
+  LOGO
+  VEHICLE
+  TEAM
+  EQUIPMENT
+  JOB
+}
+
+model Photo {
+  id           String        @id @default(cuid())
+  submissionId String
+  submission   Submission    @relation(fields: [submissionId], references: [id])
+  storageKey   String        @unique
+  category     PhotoCategory
+  exifTakenAt  DateTime?
+  exifLat      Float?
+  exifLng      Float?
+  clientAt     DateTime
+  receivedAt   DateTime      @default(now())
+
+  @@index([submissionId])
+}
+
+// ── Gains ──────────────────────────────────────────────────────────────────────
+
+enum EarningTier {
+  VISIT
+  LIVE
+  CLIENT
+  RETURN_VISIT
+  URGENCY
+}
+
+enum EarningStatus {
+  PAYABLE
+  PAID
+  VOID
+}
+
+model Earning {
+  id              String        @id @default(cuid())
+  agentId         String
+  agent           Agent         @relation(fields: [agentId], references: [id])
+  missionId       String
+  mission         Mission       @relation(fields: [missionId], references: [id])
+  tier            EarningTier
+  baseAmountCents Int
+  levelBonusPct   Int
+  amountCents     Int
+  status          EarningStatus @default(PAYABLE)
+  voidReason      String?
+  voidedBy        String?
+  createdAt       DateTime      @default(now())
+
+  @@unique([missionId, tier])
+  @@index([agentId, status])
+}
+
+// ── Anti-fraude, SMS entrants ──────────────────────────────────────────────────
+
+enum FraudType {
+  CHECKIN_FAR
+  DUPLICATE_PRO
+  PHOTO_EXIF_MISMATCH
+  PRO_DENIED
+  LOW_PRO_RATING
+  NO_SHOW
+  LATE_SYNC
+}
+
+model FraudFlag {
+  id        String    @id @default(cuid())
+  missionId String
+  mission   Mission   @relation(fields: [missionId], references: [id])
+  agentId   String
+  agent     Agent     @relation(fields: [agentId], references: [id])
+  type      FraudType
+  detail    String
+  resolved  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+
+  @@unique([missionId, agentId, type])
+}
+
+model InboundSms {
+  id        String   @id @default(cuid())
+  fromPhone String
+  body      String
+  missionId String?
+  handled   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([handled, createdAt])
+}
+
+// ── Back-office ────────────────────────────────────────────────────────────────
+
+enum AdminRole {
+  ADMIN
+  SETTER
+}
+
+model AdminUser {
+  email     String    @id
+  role      AdminRole
+  createdAt DateTime  @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actor     String // email admin, « agent:<id> » ou « system »
+  action    String
+  entity    String
+  entityId  String
+  reason    String?
+  data      Json?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
