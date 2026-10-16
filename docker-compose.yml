@@ -1,0 +1,47 @@
+services:
+  agents-terrain:
+    build: .
+    container_name: agents-terrain
+    restart: unless-stopped
+    env_file:
+      - ./secrets.env
+    environment:
+      DATABASE_URL: postgresql://agents:${POSTGRES_PASSWORD}@agents-db:5432/agents_terrain
+    depends_on:
+      - agents-db
+    volumes:
+      # Utilisé seulement si STORAGE_DRIVER=local (en production : R2).
+      - agents-uploads:/app/.data/uploads
+    networks:
+      - traefik-public
+      - agents-internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-public"
+      - "traefik.http.routers.agents-terrain.rule=Host(`${APP_DOMAIN}`)"
+      - "traefik.http.routers.agents-terrain.entrypoints=websecure"
+      - "traefik.http.routers.agents-terrain.tls=true"
+      - "traefik.http.routers.agents-terrain.tls.certresolver=letsencrypt"
+      - "traefik.http.services.agents-terrain.loadbalancer.server.port=3000"
+
+  agents-db:
+    image: postgres:16
+    container_name: agents-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: agents
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: agents_terrain
+    volumes:
+      - agents-pg:/var/lib/postgresql/data
+    networks:
+      - agents-internal
+
+volumes:
+  agents-pg:
+  agents-uploads:
+
+networks:
+  traefik-public:
+    external: true
+  agents-internal:
