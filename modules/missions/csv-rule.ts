@@ -4,6 +4,7 @@ export const PRO_CSV_COLUMNS = ['business_name', 'contact_name', 'phone', 'addre
 const REQUIRED = ['business_name', 'phone', 'address', 'city', 'state', 'zip', 'trade'] as const
 
 export interface ProCsvRow {
+  line: number // numéro de la ligne dans le fichier
   businessName: string
   contactName: string | null
   phone: string
@@ -84,6 +85,7 @@ export function parseProsCsv(text: string): { rows: ProCsvRow[]; errors: { line:
     const zip = get('zip').replace(/^(\d{5})-\d{4}$/, '$1').padStart(5, '0')
     if (!/^\d{5}$/.test(zip)) return void errors.push({ line, message: 'Code postal invalide' })
     rows.push({
+      line,
       businessName: get('business_name'),
       contactName: get('contact_name') || null,
       phone,

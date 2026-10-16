@@ -17,6 +17,7 @@ describe('parseProsCsv', () => {
     const r = parseProsCsv(`${header}\n"Delgado Concrete, LLC",Frank,(617) 555-0142,120 Tremont St,Boston,ma,2108,Concrete contractor\n`)
     expect(r.errors).toEqual([])
     expect(r.rows).toEqual([{
+      line: 2,
       businessName: 'Delgado Concrete, LLC', contactName: 'Frank', phone: '+16175550142',
       address: '120 Tremont St', city: 'Boston', state: 'MA', zip: '02108', trade: 'Concrete contractor',
     }])
