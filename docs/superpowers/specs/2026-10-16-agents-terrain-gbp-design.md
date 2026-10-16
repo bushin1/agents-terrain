@@ -1,7 +1,7 @@
 # Agents terrain GBP — Design
 
 - **Date :** 2026-10-16
-- **Statut :** design validé par Marvin (blocs 1, 2 et 3), révisé après deux relectures (v3)
+- **Statut :** design validé par Marvin (blocs 1, 2 et 3), révisé après trois relectures (v4)
 - **Projet :** nouvelle app autonome (ce repo). Aucune modification de gmb-tracker en V1.
 
 ## 1. Objectif
@@ -104,7 +104,7 @@ Accès par compte `AdminUser` (email + mot de passe + TOTP). Deux rôles : `ADMI
    - **Valider** : → `VALIDATED`, crée le gain du palier `VISIT` (ou `RETURN_VISIT` pour une mission de retour). La validation ne dépend pas de l'invitation gestionnaire.
    - **Demander une correction** : → `NEEDS_FIX`, message obligatoire.
    - **Rejeter** : → `REJECTED`, motif obligatoire.
-4. **Fiches à confirmer** : propositions de la tâche de détection (section 9.4) pour les pros dont on n'a pas encore l'accès gestionnaire. L'admin ouvre le lien Maps proposé et clique **Confirmer en ligne** ou **Ce n'est pas la bonne fiche**.
+4. **Fiches à confirmer** : propositions de la tâche de détection (section 9.4) pour les pros dont on n'a pas encore l'accès gestionnaire. L'admin ouvre le lien Maps proposé et clique **Confirmer en ligne** ou **Ce n'est pas la bonne fiche**. Même écran, second onglet **Invitations non rattachées** (section 9.4) : l'admin rattache une invitation à un pro, ou l'ignore.
 5. **Conversion** : sur un pro `LISTING_LIVE`, bouton **Convertir en client**. L'admin choisit le compte Stripe de facturation (liste configurée) et saisit l'identifiant du client (`cus_…`) créé par le process commercial actuel ; l'app vérifie qu'il existe dans ce compte (section 9.5). Exige que l'accès gestionnaire soit obtenu.
 6. **Agents** : liste et fiche agent (statut, niveau, missions par statut, taux de validation, note moyenne des pros, alertes). Actions : suspendre / réactiver, débloquer un agent `LOCKED` ou refuser sa candidature.
 7. **SMS reçus** : réponses des pros qui ne sont ni une note ni « NO » (annulation, question…), à traiter à la main.
@@ -230,7 +230,7 @@ Chaque module a un dossier `modules/<nom>/` qui expose une interface publique (`
 | `review` | File de validation, alertes fraude | `listQueue()`, `validate(missionId, adminId)`, `requestFix(...)`, `reject(...)`, `computeFlags(missionId)` | `missions`, `ledger` |
 | `ledger` | Seul point de création et d'annulation des gains | `award(missionId, tier)`, `voidEarning(id, reason, adminId)`, `balanceOf(agentId)` | réglages |
 | `payouts` | Stripe Connect, virements | `startOnboarding(agentId)`, `runPayoutBatch(adminId)`, `retryPayout(payoutId)`, `handleConnectWebhook(event)` | Stripe (compte LLC US), `ledger` |
-| `listing` | Accès gestionnaire et détection « fiche en ligne » | `matchInvitations()`, `checkVerification()`, `detectPublicListings()`, `confirmLive(proId, placeId, adminId)` | API Google Business Profile (compte dédié), API Places, `missions`, `ledger` |
+| `listing` | Accès gestionnaire et détection « fiche en ligne » | `matchInvitations()`, `listUnmatchedInvitations()`, `linkInvitation(invitationName, proId, adminId)`, `checkVerification()`, `detectPublicListings()`, `confirmLive(proId, placeId, adminId)` | API Google Business Profile (compte dédié), API Places, `missions`, `ledger` |
 | `billing` | Lecture seule des comptes Stripe de facturation des clients, conversion, palier `CLIENT` | `listAccounts()`, `customerExists(account, cusId)`, `convert(proId, account, cusId, adminId)`, `runFirstPaymentSweep()` | Stripe (clés restreintes en lecture), `missions`, `ledger` |
 | `sms` | Envoi et réception de SMS | `send(to, template, vars)`, `handleInbound(from, body)` | Twilio |
 
@@ -259,6 +259,7 @@ Montants en cents (entiers).
 
 - **Compte dédié** : un compte Google réservé aux fiches créées par les agents, distinct du compte `GoogleConnection` de gmb-tracker. Son email est affiché à l'étape 4. L'app garde son propre jeton OAuth (scope `business.manage`), avec une connexion unique faite par un admin.
 - **`matchInvitations`** (toutes les heures) : liste les invitations en attente du compte dédié (API Account Management, `accounts.invitations.list`). Pour chaque pro `VISITED` ou `LISTING_LIVE` sans `googleLocationName`, cherche l'invitation dont la fiche cible correspond (nom normalisé + code postal), l'accepte et enregistre `googleLocationName`. Plusieurs candidates : aucune n'est acceptée, l'admin choisit dans la fiche pro.
+- **Invitations non rattachées** : toute invitation en attente qui n'a été rattachée à aucun pro après un passage de `matchInvitations` apparaît dans l'écran du même nom (cas typiques : fiche à zone desservie sans adresse, nom légèrement différent de celui saisi à l'étape 3). L'admin la rattache à la main à un pro (`linkInvitation`) : acceptation de l'invitation + `googleLocationName`. Les invitations qui ne correspondent à aucun pro peuvent être ignorées.
 - **`checkVerification`** (toutes les heures) : pour les pros avec `googleLocationName` et `listingStatus = PENDING_VERIFICATION`, lit l'état de vérification. Fiche vérifiée → `LIVE`.
 - **`detectPublicListings`** (toutes les 6 heures) : pour les pros `PENDING_VERIFICATION` sans `googleLocationName` **et sans `existingPlaceId`**, fait une recherche Places (nom de la fiche + ville). Un résultat devient un `ListingCandidate` `PROPOSED` (un seul par placeId) si son nom normalisé correspond **et** si son code postal **ou** son numéro de téléphone correspond à ceux du pro (les fiches à zone desservie n'exposent pas d'adresse). L'admin le confirme dans « Fiches à confirmer » (`confirmLive`) → `LIVE`.
 - **Pro qui avait déjà une fiche publique** (`existingPlaceId`) : Places ne distingue pas une fiche revendiquée d'une fiche qui ne l'est pas, donc pas de détection publique. Son passage à `LIVE` passe uniquement par l'accès gestionnaire et `checkVerification` ; c'est pourquoi le SMS d'instructions d'invitation (ci-dessous) lui est envoyé dès que la visite est validée sans `googleLocationName`, avec un rappel à J+3 et J+10.
@@ -270,8 +271,8 @@ Montants en cents (entiers).
 Le lien entre un client et Stripe vit dans le système commercial actuel (base leadgen, `core.site.stripe_customer_id`), pas dans gmb-tracker. Ce système utilise plusieurs comptes Stripe (`core.stripe_client.compte`, par exemple `WLS`). La nouvelle app ne s'y branche pas : elle lit directement les comptes Stripe qui facturent les clients.
 
 - **Comptes configurés** : une liste `code de compte → clé restreinte en lecture seule` (clients et factures), dans les variables d'environnement. Les codes reprennent ceux de la base leadgen.
-- **Convertir en client** (`billing.convert`, admin, cf. 5.5) : choix du compte + saisie du `cus_…` → `customerExists(account, cusId)` le vérifie → `Pro.billingAccount`, `Pro.stripeCustomerId`, `convertedAt` = maintenant. Le client est créé et facturé par le process commercial habituel ; la nouvelle app n'écrit rien ailleurs.
-- **Premier paiement** : la plus ancienne facture du client, dans ce compte, avec le statut `paid`, `amount_paid > 0` et une date de paiement (`status_transitions.paid_at`) **postérieure ou égale à `convertedAt`**. Les factures à 0 $ (essai, coupon de 100 %) et celles d'un abonnement antérieur ne comptent pas.
+- **Convertir en client** (`billing.convert`, admin, cf. 5.5) : choix du compte + saisie du `cus_…` → `customerExists(account, cusId)` le vérifie. Si ce client a une facture `paid` avec `amount_paid > 0` payée **avant** `validatedAt` de la visite d'origine, la conversion est refusée avec le message « ce client payait déjà avant la visite » (pas de palier `CLIENT`). Sinon → `Pro.billingAccount`, `Pro.stripeCustomerId`, `convertedAt` = maintenant. Le client est créé et facturé par le process commercial habituel (souvent avec la première facture encaissée à la souscription, donc avant le clic « Convertir ») ; la nouvelle app n'écrit rien ailleurs.
+- **Premier paiement** : la plus ancienne facture du client, dans ce compte, avec le statut `paid`, `amount_paid > 0` et une date de paiement (`status_transitions.paid_at`) **postérieure ou égale à `validatedAt` de la visite d'origine**. Les factures à 0 $ (essai, coupon de 100 %) ne comptent pas.
 - **`runFirstPaymentSweep`** (toutes les heures) : pour les pros convertis sans palier `CLIENT` dont la visite d'origine a été validée il y a moins de 90 jours, cherche ce premier paiement. Trouvé → `ledger.award(missionVisitId, 'CLIENT')`, pro → `CLIENT`.
 
 Les fiches de ces clients sont ajoutées au suivi de gmb-tracker par le process habituel de l'équipe. Les signaux de l'API GBP (photos, posts) n'y remontent pas, car le compte gestionnaire est différent ; c'est accepté en V1.
@@ -321,7 +322,8 @@ Un `PRO_DENIED` ou un `LOW_PRO_RATING` impose une confirmation explicite avant �
   - rapprochement d'invitation et de fiche Places (nom normalisé, correspondance par code postal ou par téléphone, fiche à zone desservie sans adresse, pro avec `existingPlaceId` exclu, cas à plusieurs candidates) ;
   - `sms.handleInbound` (1–5, NO, autre texte, pas de SMS en attente).
 - **Paiements** : `runPayoutBatch` avec un faux client Stripe : succès, erreur définitive, délai dépassé puis reprise (transfert déjà créé retrouvé par `transfer_group` → aucun second transfert ; aucun transfert → recréation), agent `SUSPENDED` payé, lot relancé sans double paiement.
-- **Facturation** : le premier paiement ignore les factures à 0 $ et celles payées avant `convertedAt`, cherche dans le bon compte, et prend la plus ancienne restante.
+- **Facturation** : le premier paiement ignore les factures à 0 $, compte une facture payée entre la validation de la visite et le clic « Convertir », cherche dans le bon compte et prend la plus ancienne ; conversion refusée pour un client qui payait déjà avant la visite.
+- **Invitations** : une invitation de fiche à zone desservie (sans adresse) n'est pas rattachée automatiquement et apparaît dans « Invitations non rattachées » ; `linkInvitation` l'accepte et renseigne `googleLocationName`.
 - **Bout en bout** (Playwright) : candidature → certification → acceptation → checklist complète avec GPS et caméra simulés → validation admin → gain visible côté agent. Avec des données réalistes : noms d'entreprises longs, vraies adresses US, 15 photos.
 
 ## 13. Périmètre et découpage
