@@ -114,10 +114,10 @@ const LEVEL_COLORS: Record<string, string> = {
 }
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  SUBMITTED: { label: 'Reviewing', cls: 'mc-badge--pending' },
-  VERIFIED: { label: 'Verified', cls: 'mc-badge--success' },
-  FAILED: { label: 'Failed', cls: 'mc-badge--danger' },
-  EXPIRED: { label: 'Expired', cls: 'mc-badge--outline' },
+  SUBMITTED: { label: 'En vérification', cls: 'mc-badge--pending' },
+  VERIFIED: { label: 'Vérifié', cls: 'mc-badge--success' },
+  FAILED: { label: 'Échoué', cls: 'mc-badge--danger' },
+  EXPIRED: { label: 'Expiré', cls: 'mc-badge--outline' },
 }
 
 export function TasksView(props: {
@@ -148,7 +148,7 @@ export function TasksView(props: {
       if (data.ok) {
         setTask(data.task)
       } else {
-        setError(data.reason ?? 'Could not assign a task right now')
+        setError(data.reason ?? 'Impossible d\'assigner une mission pour l\'instant')
       }
     })
   }
@@ -168,7 +168,7 @@ export function TasksView(props: {
       setScreenshot(null)
       window.location.reload()
     } else {
-      setError(data.reason ?? 'Submission failed')
+      setError(data.reason ?? 'Erreur lors de l\'envoi')
     }
   }
 
@@ -186,7 +186,7 @@ export function TasksView(props: {
       )}
       <div style={{ padding: '4px 16px 12px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div className="mc-between">
-          <h1 className="h2">Quick Tasks</h1>
+          <h1 className="h2">Missions rapides</h1>
           <span className="mc-badge" style={{ background: LEVEL_COLORS[props.level], color: props.level === 'GOLD' ? '#000' : '#fff', height: 36 }}>
             <Icon name="trophy" /> {props.level}
           </span>
@@ -195,24 +195,24 @@ export function TasksView(props: {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <div className="mc-stat">
             <span className="mc-stat__value">{props.todayCount}/{props.maxToday}</span>
-            <span className="mc-stat__label">Today</span>
+            <span className="mc-stat__label">Aujourd&apos;hui</span>
           </div>
           <div className="mc-stat">
             <span className="mc-stat__value">{usd(props.taskAmountCents, { cents: true })}</span>
-            <span className="mc-stat__label">Per task</span>
+            <span className="mc-stat__label">Par avis</span>
           </div>
         </div>
 
         <div style={{ background: 'var(--surface)', borderRadius: 12, padding: '12px 16px' }}>
           <div className="mc-between" style={{ marginBottom: 6 }}>
-            <span className="body-s mc-muted">Balance</span>
+            <span className="body-s mc-muted">Solde</span>
             <span className="body-s" style={{ fontWeight: 600 }}>{usd(props.pendingBalanceCents, { cents: true })}</span>
           </div>
           <div style={{ background: 'var(--border)', borderRadius: 4, height: 6 }}>
             <div style={{ background: 'var(--accent)', borderRadius: 4, height: 6, width: `${progress}%`, transition: 'width 0.3s' }} />
           </div>
           <p className="body-xs mc-muted" style={{ marginTop: 4 }}>
-            {progress >= 100 ? 'Ready for payout!' : `${usd(props.cashoutThresholdCents - props.pendingBalanceCents, { cents: true })} until first payout`}
+            {progress >= 100 ? 'Prêt pour le versement !' : `${usd(props.cashoutThresholdCents - props.pendingBalanceCents, { cents: true })} jusqu'au premier versement`}
           </p>
         </div>
       </div>
@@ -221,14 +221,14 @@ export function TasksView(props: {
         {task ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div className="mc-card" style={{ padding: 16 }}>
-              <p className="body-s mc-muted" style={{ marginBottom: 4 }}>Your task</p>
+              <p className="body-s mc-muted" style={{ marginBottom: 4 }}>Votre mission</p>
               <h3 style={{ margin: 0 }}>{task.businessName}</h3>
               <p className="body-s mc-muted">{task.city} &middot; {task.trade}</p>
 
               <div style={{ marginTop: 16, background: 'var(--surface)', borderRadius: 8, padding: 12 }}>
-                <p className="body-s" style={{ fontWeight: 600, marginBottom: 4 }}>Suggested review text:</p>
+                <p className="body-s" style={{ fontWeight: 600, marginBottom: 4 }}>Exemple de texte d&apos;avis :</p>
                 <p className="body-s" style={{ fontStyle: 'italic', lineHeight: 1.5 }}>&ldquo;{task.reviewText}&rdquo;</p>
-                <p className="body-xs mc-muted" style={{ marginTop: 8 }}>Feel free to rephrase in your own words.</p>
+                <p className="body-xs mc-muted" style={{ marginTop: 8 }}>Reformulez librement avec vos propres mots.</p>
               </div>
 
               <a
@@ -238,11 +238,11 @@ export function TasksView(props: {
                 className="mc-btn mc-btn--primary mc-btn--block"
                 style={{ marginTop: 16 }}
               >
-                <Icon name="external" /> Open Google Review Page
+                <Icon name="external" /> Ouvrir la page d&apos;avis Google
               </a>
 
               <div style={{ marginTop: 16 }}>
-                <p className="body-s" style={{ fontWeight: 600, marginBottom: 8 }}>Upload proof (screenshot):</p>
+                <p className="body-s" style={{ fontWeight: 600, marginBottom: 8 }}>Envoyer la preuve (capture d&apos;écran) :</p>
                 <input
                   type="file"
                   accept="image/*"
@@ -260,12 +260,12 @@ export function TasksView(props: {
                   disabled={submitting}
                   onClick={submitTask}
                 >
-                  <Icon name="check" /> {submitting ? 'Submitting...' : 'Submit Task'}
+                  <Icon name="check" /> {submitting ? 'Envoi en cours...' : 'Envoyer ma preuve'}
                 </button>
               )}
 
               <p className="body-xs mc-muted" style={{ marginTop: 12, textAlign: 'center' }}>
-                Expires: {new Date(task.expiresAt).toLocaleTimeString()}
+                Expire à : {new Date(task.expiresAt).toLocaleTimeString('fr-CA')}
               </p>
             </div>
           </div>
@@ -275,7 +275,7 @@ export function TasksView(props: {
               <Icon name="zap" className="mc-ico--xl" />
             </div>
             <p className="body-s" style={{ textAlign: 'center', maxWidth: 280 }}>
-              Leave a review for a local business and earn {usd(props.taskAmountCents, { cents: true })}. Takes about 2 minutes.
+              Publiez un avis pour une entreprise locale et gagnez {usd(props.taskAmountCents, { cents: true })}. Environ 2 minutes.
             </p>
             {error && <p className="mc-error body-s" role="alert">{error}</p>}
             <button
@@ -294,7 +294,7 @@ export function TasksView(props: {
 
         {props.recentTasks.length > 0 && (
           <div style={{ marginTop: 32 }}>
-            <h3 className="h4" style={{ marginBottom: 12 }}>Recent tasks</h3>
+            <h3 className="h4" style={{ marginBottom: 12 }}>Missions récentes</h3>
             <div className="mc-stack">
               {props.recentTasks.map((t) => {
                 const badge = STATUS_BADGE[t.status] ?? { label: t.status, cls: 'mc-badge--outline' }

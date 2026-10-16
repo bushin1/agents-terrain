@@ -14,13 +14,13 @@ export default async function ModulePage({ params }: { params: Promise<{ moduleI
   const next = ACADEMY_MODULES[i + 1]
   return (
     <>
-      <AppBar title={`Lesson ${i + 1} of ${ACADEMY_MODULES.length}`} back="/agent/academy" />
+      <AppBar title={`Leçon ${i + 1} sur ${ACADEMY_MODULES.length}`} back="/agent/academy" />
       <main className="mc-scroll">
         <h1 className="h1">{m.title}</h1>
         {m.videoUrl ? (
           <video src={m.videoUrl} controls playsInline style={{ width: '100%', borderRadius: 'var(--radius-lg)', marginTop: 16 }} />
         ) : (
-          <p className="mc-badge mc-badge--outline" style={{ marginTop: 12 }}><Icon name="video" /> Video coming soon</p>
+          <p className="mc-badge mc-badge--outline" style={{ marginTop: 12 }}><Icon name="video" /> Vidéo bientôt disponible</p>
         )}
         <ul className="mc-card" style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {m.summary.map((line) => (
@@ -33,7 +33,7 @@ export default async function ModulePage({ params }: { params: Promise<{ moduleI
       </main>
       <div className="mc-bottom">
         <Link href={next ? `/agent/academy/${next.id}` : '/agent/academy/quiz'} className="mc-btn mc-btn--primary mc-btn--lg mc-btn--block">
-          {next ? `Next: ${next.title}` : 'Start the quiz'}
+          {next ? `Suivant : ${next.title}` : 'Commencer le quiz'}
         </Link>
       </div>
     </>

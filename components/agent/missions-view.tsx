@@ -55,20 +55,20 @@ export function MissionsView({ items, me, radiusMiles, zip, amounts }: {
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
       <div style={{ padding: '4px 16px 12px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div className="mc-between">
-          <h1 className="h2">Missions near you</h1>
+          <h1 className="h2">Missions près de vous</h1>
           <span className="mc-badge mc-badge--outline" style={{ height: 36 }}><Icon name="pin" /> {zip} · {radiusMiles} mi</span>
         </div>
-        <div className="mc-seg" role="group" aria-label="View">
-          <button type="button" aria-pressed={view === 'map'} onClick={() => setView('map')}><Icon name="map" className="mc-ico--sm" /> Map</button>
-          <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')}><Icon name="list" className="mc-ico--sm" /> List</button>
+        <div className="mc-seg" role="group" aria-label="Affichage">
+          <button type="button" aria-pressed={view === 'map'} onClick={() => setView('map')}><Icon name="map" className="mc-ico--sm" /> Carte</button>
+          <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')}><Icon name="list" className="mc-ico--sm" /> Liste</button>
         </div>
       </div>
 
       {items.length === 0 ? (
         <div className="mc-empty">
           <div className="mc-empty__art"><MapMotif seed={7} cols={4} rows={3} gap={3} water={false} height={112} pins={[{ x: 55, y: 55, state: 'muted', label: 'No mission' }]} /></div>
-          <h3>No missions within {radiusMiles} miles right now</h3>
-          <p>New missions are posted as our team books visits. We’ll text you when one opens near you.</p>
+          <h3>Aucune mission dans un rayon de {radiusMiles} mi en ce moment</h3>
+          <p>De nouvelles missions sont publiées au fil des réservations. Nous vous enverrons un SMS dès qu&apos;une mission s&apos;ouvre près de vous.</p>
         </div>
       ) : view === 'map' ? (
         <div style={{ position: 'relative', flex: 1, minHeight: 420 }}>
@@ -81,13 +81,13 @@ export function MissionsView({ items, me, radiusMiles, zip, amounts }: {
           {current && (
             <div className="mc-sheet" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 5 }}>
               {card(current)}
-              <Link href={`/agent/missions/${current.id}`} className="mc-btn mc-btn--primary mc-btn--block" style={{ marginTop: 12 }}>View mission</Link>
+              <Link href={`/agent/missions/${current.id}`} className="mc-btn mc-btn--primary mc-btn--block" style={{ marginTop: 12 }}>Voir la mission</Link>
             </div>
           )}
         </div>
       ) : (
         <div className="mc-scroll" style={{ paddingTop: 4 }}>
-          <p className="body-s mc-muted" style={{ marginBottom: 12 }}>{items.length} mission{items.length > 1 ? 's' : ''} within {radiusMiles} mi · sorted by distance</p>
+          <p className="body-s mc-muted" style={{ marginBottom: 12 }}>{items.length} mission{items.length > 1 ? 's' : ''} dans un rayon de {radiusMiles} mi · triées par distance</p>
           <div className="mc-stack">{items.map(card)}</div>
         </div>
       )}
