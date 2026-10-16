@@ -19,8 +19,14 @@ export function Footer() {
             <span><b>{BRAND_LEGAL}</b><br />{BRAND_ADDRESS}</span>
           </div>
           <nav aria-label="Pages légales">
-            {['Conditions', 'Confidentialité', 'Contrat agent', 'Contact', "Centre d'aide"].map((label) => (
-              <a href="#" key={label}>{label}</a>
+            {([
+              ['Conditions', '/conditions'],
+              ['Confidentialité', '/confidentialite'],
+              ['Contrat agent', '/contrat'],
+              ['Contact', '/contact'],
+              ["Centre d'aide", '/aide'],
+            ] as [string, string][]).map(([label, href]) => (
+              <a href={href} key={label}>{label}</a>
             ))}
           </nav>
           <div className="lp-foot__legal">

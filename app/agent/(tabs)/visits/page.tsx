@@ -7,10 +7,10 @@ import { listAgentMissions } from '@/modules/missions'
 import { getSettings } from '@/modules/settings'
 
 const GROUPS = [
-  { title: 'Upcoming', statuses: ['ACCEPTED'], badge: null },
-  { title: 'Needs a fix', statuses: ['NEEDS_FIX'], badge: 'danger' },
-  { title: 'In review', statuses: ['SUBMITTED'], badge: 'pending' },
-  { title: 'Done', statuses: ['VALIDATED', 'REJECTED'], badge: null },
+  { title: 'En cours', statuses: ['ACCEPTED'], badge: null },
+  { title: 'Correction requise', statuses: ['NEEDS_FIX'], badge: 'danger' },
+  { title: 'En vérification', statuses: ['SUBMITTED'], badge: 'pending' },
+  { title: 'Terminé', statuses: ['VALIDATED', 'REJECTED'], badge: null },
 ] as const
 
 export default async function VisitsPage({ searchParams }: { searchParams: Promise<{ released?: string }> }) {
@@ -19,14 +19,14 @@ export default async function VisitsPage({ searchParams }: { searchParams: Promi
   const [missions, settings] = await Promise.all([listAgentMissions(agent), getSettings()])
   return (
     <>
-      <AppBar title="Visits" large />
-      {released && <div className="mc-toast" role="status"><span className="mc-toast__icon"><Icon name="check" /></span><span>Mission released. The owner was told by text.</span></div>}
+      <AppBar title="Missions" large />
+      {released && <div className="mc-toast" role="status"><span className="mc-toast__icon"><Icon name="check" /></span><span>Mission annulée. Le propriétaire a été prévenu par SMS.</span></div>}
       <main className="mc-scroll">
         {missions.length === 0 && (
           <div className="mc-empty">
-            <h3>No visits yet</h3>
-            <p>Accept a mission to see it here. Your first {usd(settings.tierAmountsCents.VISIT)} is earned once your first visit is validated.</p>
-            <Link href="/agent/missions" className="mc-btn mc-btn--primary">Find a mission</Link>
+            <h3>Aucune mission pour l&apos;instant</h3>
+            <p>Acceptez une mission pour la voir ici.</p>
+            <Link href="/agent/missions" className="mc-btn mc-btn--primary">Trouver une mission</Link>
           </div>
         )}
         {GROUPS.map((g) => {
@@ -42,7 +42,7 @@ export default async function VisitsPage({ searchParams }: { searchParams: Promi
                       <div style={{ fontWeight: 600 }}>{m.businessName}</div>
                       <div className="body-s mc-muted">{m.city}, {m.state} · {m.slotLabel}</div>
                     </Link>
-                    {m.status === 'REJECTED' ? <span className="mc-badge mc-badge--outline">Not validated</span> : m.earnedCents > 0 ? <span className="money">{usd(m.earnedCents, { cents: true })}</span> : g.badge === 'pending' ? <span className="mc-badge mc-badge--pending"><Icon name="clock" /> Pending</span> : g.badge === 'danger' ? <span className="mc-badge mc-badge--danger"><Icon name="alert" /> Fix</span> : <Icon name="chev-right" />}
+                    {m.status === 'REJECTED' ? <span className="mc-badge mc-badge--outline">Non validé</span> : m.earnedCents > 0 ? <span className="money">{usd(m.earnedCents, { cents: true })}</span> : g.badge === 'pending' ? <span className="mc-badge mc-badge--pending"><Icon name="clock" /> En attente</span> : g.badge === 'danger' ? <span className="mc-badge mc-badge--danger"><Icon name="alert" /> À corriger</span> : <Icon name="chev-right" />}
                   </li>
                 ))}
               </ul>

@@ -498,6 +498,22 @@
 .lp-foot__legal { display: flex; flex-direction: column; gap: var(--space-2); }
 .lp-foot__legal b { color: var(--on-forest); font-weight: 650; }
 
+/* ---------- Legal pages ---------- */
+.lp-legal { padding: var(--space-6) var(--space-4) var(--space-9); max-width: 860px; margin: 0 auto; }
+.lp-legal__inner { max-width: 720px; }
+.lp-legal h1 { font: 700 32px/1.1 var(--font-display); letter-spacing: -0.025em; margin-bottom: var(--space-2); }
+.lp-legal section { margin-top: var(--space-6); }
+.lp-legal h2 { font: 650 20px/1.3 var(--font-display); letter-spacing: -0.015em; margin-bottom: var(--space-2); }
+.lp-legal p { font-size: 15px; line-height: 24px; color: var(--ink-muted); margin-top: var(--space-2); }
+.lp-legal ul { padding-left: var(--space-5); margin-top: var(--space-2); display: flex; flex-direction: column; gap: var(--space-1); }
+.lp-legal li { font-size: 15px; line-height: 24px; color: var(--ink-muted); }
+.lp-legal address { font-style: normal; font-size: 15px; line-height: 24px; color: var(--ink-muted); margin-top: var(--space-2); }
+.lp-legal a { color: var(--signal); }
+.lp-faq__item { background: var(--surface); border-radius: var(--radius-lg); box-shadow: inset 0 0 0 1px var(--line); margin-top: var(--space-2); }
+.lp-faq__item summary { list-style: none; cursor: pointer; min-height: 56px; padding: var(--space-3) var(--space-4); font: 650 16px/1.3 var(--font-display); display: flex; align-items: center; }
+.lp-faq__item summary::-webkit-details-marker { display: none; }
+.lp-faq__item p { padding: 0 var(--space-4) var(--space-4); font-size: 15px; line-height: 24px; color: var(--ink-muted); }
+
 /* ---------- Landing: desktop ---------- */
 @container (min-width: 900px) {
   .lp-wrap { padding: 0 var(--space-7); }
