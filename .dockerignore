@@ -1,0 +1,10 @@
+node_modules
+.next
+.data
+.git
+.env
+.env*.local
+secrets.env
+coverage
+tests
+design/mapcrew/components/*/preview.html
