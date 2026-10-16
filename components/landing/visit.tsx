@@ -1,5 +1,5 @@
 import { usd, type PayAmounts } from '@/components/mc/money'
-import { PhotoPlaceholder } from '@/components/mc/photo-placeholder'
+import { Scene } from './illustrations'
 
 // Déroulé d'une visite, minute par minute. Port de MapCrew.landing.visit.
 export function Visit({ amounts }: { amounts: PayAmounts }) {
@@ -18,7 +18,7 @@ export function Visit({ amounts }: { amounts: PayAmounts }) {
           <p className="lp-eyebrow">What a visit looks like</p>
           <h2 className="lp-h2" id="visit-h">About an hour, start to finish.</h2>
           <p className="lp-lede">The app walks you through every step. Training covers the rest, including what to say.</p>
-          <PhotoPlaceholder className="lp-visitphoto" title="Agent and owner at a fencing workshop" brief="Daylight, owner holding their own phone, agent pointing at the screen. Casual clothes, early 20s–30s." />
+          <Scene name="visit" className="lp-visitphoto" label="An agent points at the screen while the owner sets up the profile on their own phone, next to their truck." />
         </div>
         <ol className="lp-timeline">
           {steps.map(([t, title, text]) => (

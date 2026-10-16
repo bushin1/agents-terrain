@@ -17,3 +17,35 @@ body {
 @container (max-width: 899px) {
   .lp-hero.lp-wrap { padding-left: var(--space-4); padding-right: var(--space-4); }
 }
+
+/* ── Landing : compléments mobile-first (titre, notification, illustrations, barre fixe) ── */
+.lp-hero h1 { font-weight: 800; font-size: 50px; line-height: .95; letter-spacing: -0.035em; }
+.lp-hero h1 em { color: var(--signal-text); }
+.lp-hero h1 em::after { background: var(--signal-soft); height: .28em; }
+@container (min-width: 900px) { .lp-hero h1 { font-size: 80px; } }
+
+.lp-toast {
+  position: absolute; z-index: 6; left: 12px; top: 14px; max-width: calc(100% - 24px);
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px 10px 10px;
+  background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-raised);
+  animation: lp-toast-in .6s var(--ease) .4s both;
+}
+.lp-toast__i { width: 34px; height: 34px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--success-soft); color: var(--success); }
+.lp-toast__t { display: flex; flex-direction: column; font-size: 13px; line-height: 17px; color: var(--ink-muted); }
+.lp-toast__t b { font: 700 14px/18px var(--font-sans); color: var(--ink); }
+@keyframes lp-toast-in { from { opacity: 0; transform: translateY(-8px) scale(.97); } to { opacity: 1; transform: none; } }
+@container (min-width: 900px) { .lp-toast { left: -18px; top: auto; bottom: 120px; } }
+
+.lp-scene { display: block; width: 100%; height: auto; background: var(--surface-sunk); }
+.lp-visitphoto.lp-scene { border-radius: var(--radius-xl); min-height: 0; box-shadow: var(--shadow-card); }
+.lp-persona__art { aspect-ratio: 360 / 200; }
+
+.lp-sticky {
+  position: fixed; z-index: 50; left: 0; right: 0; bottom: 0;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, var(--paper) 70%, transparent);
+  transform: translateY(110%); transition: transform .25s var(--ease);
+}
+.lp-sticky[data-show="true"] { transform: none; }
+@container (min-width: 900px) { .lp-sticky { display: none; } }
+@media (prefers-reduced-motion: reduce) { .lp-toast { animation: none; } .lp-sticky { transition: none; } }

@@ -1,13 +1,13 @@
-import { PhotoPlaceholder } from '@/components/mc/photo-placeholder'
+import { Scene, type SceneName } from './illustrations'
 
 // Pour qui. Les témoignages restent des placeholders tant qu'aucun agent réel n'a accepté d'être cité
 // (règle de contenu n° 3 : jamais de citation inventée). Port de MapCrew.landing.who.
 export const TESTIMONIAL_PLACEHOLDER = '[Testimonial placeholder — real agent quote, with permission]'
 
-const PERSONAS = [
-  ['Students', 'Fit visits between classes. Pick a mission, go, be back for your 2 PM.', 'Agent with a backpack talking with a concrete contractor beside a mixer truck'],
-  ['Parents', 'Daytime only, during school hours, close to home. No quotas, no minimums.', 'Agent and tree-service owner looking at photos next to a chipper'],
-  ['Gig workers', 'Pay per mission is fixed and shown up front, with distance. Payouts every Friday.', 'Agent photographing a roofing crew’s truck in a driveway'],
+const PERSONAS: [string, string, string, SceneName][] = [
+  ['Students', 'Fit visits between classes. Pick a mission, go, be back for your 2 PM.', 'Agent with a backpack talking with a concrete contractor beside a mixer truck', 'student'],
+  ['Parents', 'Daytime only, during school hours, close to home. No quotas, no minimums.', 'Agent and tree-service owner looking at photos next to a chipper', 'parent'],
+  ['Gig workers', 'Pay per mission is fixed and shown up front, with distance. Payouts every Friday.', 'Agent photographing a roofing crew’s truck in a driveway', 'gig'],
 ]
 
 export function Who() {
@@ -17,9 +17,9 @@ export function Who() {
         <p className="lp-eyebrow">Who it’s for</p>
         <h2 className="lp-h2" id="who-h">Flexible work for people with a phone and a free morning.</h2>
         <div className="lp-who">
-          {PERSONAS.map(([title, text, brief]) => (
+          {PERSONAS.map(([title, text, brief, scene]) => (
             <article className="lp-persona" key={title}>
-              <PhotoPlaceholder title={title} brief={brief} />
+              <Scene name={scene} label={brief} className="lp-persona__art" />
               <div className="lp-persona__body">
                 <h3>{title}</h3>
                 <p>{text}</p>

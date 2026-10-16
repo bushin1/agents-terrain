@@ -23,7 +23,7 @@ export function Hero({ amounts }: { amounts: PayAmounts }) {
             Visit contractors near you, help them set up their free Google Business Profile, and earn{' '}
             <b>{`up to ${upTo} per business`}</b> — paid every Friday.
           </p>
-          <div className="lp-hero__ctas">
+          <div className="lp-hero__ctas" id="hero-ctas">
             <a className="mc-btn mc-btn--primary mc-btn--lg" href="/apply">Apply in 5 minutes <Icon name="arrow-right" /></a>
             <a className="mc-btn mc-btn--secondary mc-btn--lg" href="#pay">See how pay works</a>
           </div>
@@ -44,6 +44,11 @@ export function Hero({ amounts }: { amounts: PayAmounts }) {
               { x: 92, y: 84, state: 'muted', label: 'Booked by another agent' },
             ]}
           />
+          {/* Notification d'exemple : ce que l'agent reçoit quand sa visite est validée. */}
+          <div className="lp-toast" aria-hidden="true">
+            <span className="lp-toast__i"><Icon name="check" /></span>
+            <span className="lp-toast__t"><b>Visit validated</b><span>{`${usd(amounts.VISIT)} added to your balance`}</span></span>
+          </div>
           {/* Téléphone d'illustration : masqué aux lecteurs d'écran, donc rien d'interactif dedans. */}
           <div className="lp-hero__phone" aria-hidden="true">
             <MapMotif
