@@ -15,6 +15,8 @@ export const smsTemplates = {
     `${BRAND_NAME}: ${plain(p.agentFirstName)} will visit you on ${p.slot} to help set up your free Google Business Profile, as agreed on the phone. Reply here if you need to change anything.`,
   proReminder: (p: { agentFirstName: string; slot: string }) =>
     `${BRAND_NAME} reminder: ${plain(p.agentFirstName)} visits you tomorrow, ${p.slot}.`,
+  proAgentChanged: (p: { agentFirstName: string; slot: string }) =>
+    `${BRAND_NAME}: ${plain(p.agentFirstName)} can no longer make your visit on ${p.slot}. We will text you when another agent confirms.`,
   agentReminder: (p: { businessName: string; slot: string }) =>
     `${BRAND_NAME} reminder: your visit to ${plain(p.businessName)} is on ${p.slot}. Open the app before you go.`,
   proPostVisit: (p: { agentFirstName: string }) =>

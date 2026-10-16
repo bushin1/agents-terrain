@@ -6,6 +6,7 @@ const samples = [
   smsTemplates.otp('123456'),
   smsTemplates.proVisitConfirmed({ agentFirstName: 'Maya', slot: 'Wed, Jul 1, 10:00 AM' }),
   smsTemplates.proReminder({ agentFirstName: 'Maya', slot: 'Wed, Jul 1, 10:00 AM' }),
+  smsTemplates.proAgentChanged({ agentFirstName: 'Maya', slot: 'Wed, Jul 1, 10:00 AM' }),
   smsTemplates.agentReminder({ businessName: 'Boston Concrete', slot: 'Wed, Jul 1, 10:00 AM' }),
   smsTemplates.proPostVisit({ agentFirstName: 'Maya' }),
   smsTemplates.agentNoShowCheck({ businessName: 'Boston Concrete' }),
