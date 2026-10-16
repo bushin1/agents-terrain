@@ -11,3 +11,9 @@ body {
   color: var(--ink);
   font-family: var(--font-sans);
 }
+
+/* Correctif du design system : sur mobile, `.lp-hero` (padding vertical) écrase la gouttière de 16 px
+   de `.lp-wrap` et le titre touche le bord de l'écran. Desktop (≥ 900 px) inchangé, identique à la maquette. */
+@container (max-width: 899px) {
+  .lp-hero.lp-wrap { padding-left: var(--space-4); padding-right: var(--space-4); }
+}
