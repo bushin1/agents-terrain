@@ -8,6 +8,7 @@ const LABELS = {
   CLIENT: ['Became customer', 'Only if the owner decides to sign up.', 'Signed up · added to your balance.'],
   RETURN_VISIT: ['Return visit validated', 'Our team is reviewing your checklist.', 'Validated · added to your balance.'],
   URGENCY: ['Mission bonus', '', 'Added to your balance.'],
+  QUICK_TASK: ['Quick task', 'Review submitted. Under verification.', 'Verified · added to your balance.'],
 } as const
 
 export function PayoutTracker({ steps }: { steps: TrackStep[] }) {

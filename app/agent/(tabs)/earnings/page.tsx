@@ -7,7 +7,7 @@ import { prisma } from '@/lib/prisma'
 import { balanceOf, listEarnings } from '@/modules/ledger'
 import { getSettings } from '@/modules/settings'
 
-const TIER_LABEL = { VISIT: 'Visit validated', LIVE: 'Profile live', CLIENT: 'Became customer', RETURN_VISIT: 'Return visit', URGENCY: 'Mission bonus' } as const
+const TIER_LABEL = { VISIT: 'Visit validated', LIVE: 'Profile live', CLIENT: 'Became customer', RETURN_VISIT: 'Return visit', URGENCY: 'Mission bonus', QUICK_TASK: 'Quick task' } as const
 
 export default async function EarningsPage() {
   const agent = await requireAgentIn(['ACTIVE'])

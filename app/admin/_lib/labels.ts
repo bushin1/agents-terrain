@@ -8,7 +8,7 @@ export const MISSION_STATUS_LABELS: Record<MissionStatus, string> = {
   OPEN: 'Ouverte', ACCEPTED: 'Acceptée', SUBMITTED: 'Soumise', NEEDS_FIX: 'Correction demandée',
   VALIDATED: 'Validée', REJECTED: 'Rejetée', CANCELLED: 'Annulée',
 }
-export const MISSION_TYPE_LABELS: Record<MissionType, string> = { VISIT: 'Visite', RETURN_VISIT: 'Visite de retour' }
+export const MISSION_TYPE_LABELS: Record<MissionType, string> = { VISIT: 'Visite', RETURN_VISIT: 'Visite de retour', QUICK_TASK: 'Quick Task' }
 export const AGENT_STATUS_LABELS: Record<AgentStatus, string> = {
   APPLICANT: 'Candidat', TRAINING: 'En formation', LOCKED: 'Bloqué (quiz)', REFUSED: 'Refusé',
   CERTIFIED: 'Certifié', ACTIVE: 'Actif', SUSPENDED: 'Suspendu',
@@ -16,9 +16,10 @@ export const AGENT_STATUS_LABELS: Record<AgentStatus, string> = {
 export const FRAUD_LABELS: Record<FraudType, string> = {
   CHECKIN_FAR: 'Check-in éloigné', DUPLICATE_PRO: 'Pro déjà visité', PHOTO_EXIF_MISMATCH: 'Photos suspectes (EXIF)',
   PRO_DENIED: 'Le pro conteste la visite', LOW_PRO_RATING: 'Note basse du pro', NO_SHOW: 'Absence', LATE_SYNC: 'Check-in synchronisé tard',
+  REVIEW_REMOVED: 'Avis supprimé', REVIEW_SUSPICIOUS: 'Avis suspect',
 }
 export const TIER_LABELS: Record<EarningTier, string> = {
-  VISIT: 'Visite', LIVE: 'Fiche en ligne', CLIENT: 'Client signé', RETURN_VISIT: 'Visite de retour', URGENCY: 'Bonus urgence',
+  VISIT: 'Visite', LIVE: 'Fiche en ligne', CLIENT: 'Client signé', RETURN_VISIT: 'Visite de retour', URGENCY: 'Bonus urgence', QUICK_TASK: 'Quick Task',
 }
 export const EARNING_STATUS_LABELS: Record<EarningStatus, string> = { PAYABLE: 'À payer', PAID: 'Payé', VOID: 'Annulé' }
 export const PHOTO_CATEGORY_LABELS: Record<PhotoCategory, string> = {

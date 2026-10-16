@@ -1,11 +1,11 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/lib/session'
 import { runAction } from '@/app/admin/_lib/run-action'
+import type { ActionState } from '@/app/admin/_lib/forms'
 
-export const createTarget = runAction(async (fd: FormData) => {
+export async function createTarget(_prev: ActionState, fd: FormData): Promise<ActionState> {
   await requireAdmin()
   const data = {
     placeId: String(fd.get('placeId')).trim(),
@@ -18,31 +18,31 @@ export const createTarget = runAction(async (fd: FormData) => {
     maxTotal: Number(fd.get('maxTotal')) || 20,
   }
   if (!data.placeId || !data.name || !data.city || !data.state) throw new Error('Missing required fields')
-  await prisma.reviewTarget.create({ data })
-  revalidatePath('/admin/targets')
-})
+  return runAction(() => prisma.reviewTarget.create({ data }), 'Target created.')
+}
 
-export const toggleTarget = runAction(async (fd: FormData) => {
+export async function toggleTarget(_prev: ActionState, fd: FormData): Promise<ActionState> {
   await requireAdmin()
   const id = String(fd.get('id'))
-  const target = await prisma.reviewTarget.findUniqueOrThrow({ where: { id } })
-  await prisma.reviewTarget.update({ where: { id }, data: { active: !target.active } })
-  revalidatePath('/admin/targets')
-})
+  return runAction(async () => {
+    const target = await prisma.reviewTarget.findUniqueOrThrow({ where: { id } })
+    await prisma.reviewTarget.update({ where: { id }, data: { active: !target.active } })
+  }, 'Target toggled.')
+}
 
-export const updateTargetTier = runAction(async (fd: FormData) => {
+export async function updateTargetTier(_prev: ActionState, fd: FormData): Promise<ActionState> {
   await requireAdmin()
   const id = String(fd.get('id'))
   const tier = String(fd.get('tier')) as 'SACRIFICIAL' | 'STANDARD' | 'PREMIUM'
-  await prisma.reviewTarget.update({ where: { id }, data: { tier } })
-  revalidatePath('/admin/targets')
-})
+  return runAction(() => prisma.reviewTarget.update({ where: { id }, data: { tier } }), 'Tier updated.')
+}
 
-export const deleteTarget = runAction(async (fd: FormData) => {
+export async function deleteTarget(_prev: ActionState, fd: FormData): Promise<ActionState> {
   await requireAdmin()
   const id = String(fd.get('id'))
-  const hasResults = await prisma.quickTaskResult.count({ where: { targetId: id } })
-  if (hasResults > 0) throw new Error('Cannot delete: target has task results')
-  await prisma.reviewTarget.delete({ where: { id } })
-  revalidatePath('/admin/targets')
-})
+  return runAction(async () => {
+    const hasResults = await prisma.quickTaskResult.count({ where: { targetId: id } })
+    if (hasResults > 0) throw new Error('Cannot delete: target has task results')
+    await prisma.reviewTarget.delete({ where: { id } })
+  }, 'Target deleted.')
+}

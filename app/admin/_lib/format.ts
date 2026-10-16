@@ -59,6 +59,8 @@ export function isCancellable(status: MissionStatus): boolean {
   return status === 'OPEN' || status === 'ACCEPTED' || status === 'NEEDS_FIX'
 }
 
-export function missionHref(m: { id: string; proId: string; status: MissionStatus }): string {
-  return isReviewable(m.status) ? `/admin/review/${m.id}` : `/admin/pros/${m.proId}#mission-${m.id}`
+export function missionHref(m: { id: string; proId: string | null; status: MissionStatus }): string {
+  if (isReviewable(m.status)) return `/admin/review/${m.id}`
+  if (m.proId) return `/admin/pros/${m.proId}#mission-${m.id}`
+  return `/admin/missions`
 }

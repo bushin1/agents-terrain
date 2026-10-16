@@ -1,10 +1,11 @@
 import crypto from 'node:crypto'
-import type { PrismaClient, AgentLevel, QuickTaskStatus } from '@prisma/client'
+import type { Prisma, PrismaClient, AgentLevel, QuickTaskStatus } from '@prisma/client'
 import { pickTarget, pickReviewText, buildReviewUrl, type DispatchCandidate } from './dispatch'
 import { checkTaskEligibility, computeTrustScore, shouldPromote, REVIEW_LINK_TTL_MS } from './task-rule'
 import type { Settings } from '@/modules/settings/defaults'
 
 const DAY_MS = 86_400_000
+export const SYSTEM_PRO_ID = '__quick_task__'
 
 function startOfDay(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
@@ -76,10 +77,17 @@ export async function assignTask(db: PrismaClient, agentId: string, settings: Se
   const reviewText = pickReviewText(target.trade)
   const expiresAt = new Date(now.getTime() + settings.quickTask.expirationHours * 3_600_000)
 
+  await db.pro.upsert({
+    where: { id: SYSTEM_PRO_ID },
+    update: {},
+    create: { id: SYSTEM_PRO_ID, phone: '+10000000000', businessName: 'Quick Tasks (system)', address: '', zip: '00000', city: '', state: 'US', timeZone: 'America/New_York', trade: 'system' },
+  })
+
   const mission = await db.mission.create({
     data: {
       type: 'QUICK_TASK',
       status: 'ACCEPTED',
+      proId: SYSTEM_PRO_ID,
       agentId,
       slotAt: now,
       acceptedAt: now,
@@ -141,7 +149,7 @@ export async function verifyTask(db: PrismaClient, taskId: string, approved: boo
   const now = new Date()
   const newStatus: QuickTaskStatus = approved ? 'VERIFIED' : 'FAILED'
 
-  const ops = [
+  const ops: Prisma.PrismaPromise<unknown>[] = [
     db.quickTaskResult.update({ where: { id: taskId }, data: { status: newStatus, verifiedAt: now } }),
     db.mission.update({ where: { id: task.missionId }, data: { status: approved ? 'VALIDATED' : 'REJECTED', validatedAt: approved ? now : undefined, rejectReason: approved ? undefined : 'Review not verified' } }),
   ]

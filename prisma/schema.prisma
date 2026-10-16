@@ -144,8 +144,8 @@ enum MissionStatus {
 
 model Mission {
   id                   String        @id @default(cuid())
-  proId                String?
-  pro                  Pro?          @relation(fields: [proId], references: [id])
+  proId                String
+  pro                  Pro           @relation(fields: [proId], references: [id])
   agentId              String?
   agent                Agent?        @relation(fields: [agentId], references: [id])
   type                 MissionType   @default(VISIT)

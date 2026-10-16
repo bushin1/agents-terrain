@@ -24,17 +24,11 @@ ALTER TYPE "FraudType" ADD VALUE 'REVIEW_SUSPICIOUS';
 -- AlterEnum
 ALTER TYPE "MissionType" ADD VALUE 'QUICK_TASK';
 
--- DropForeignKey
-ALTER TABLE "Mission" DROP CONSTRAINT "Mission_proId_fkey";
-
 -- AlterTable
 ALTER TABLE "Agent" ADD COLUMN     "level" "AgentLevel" NOT NULL DEFAULT 'STARTER',
 ADD COLUMN     "profileAnswers" JSONB,
 ADD COLUMN     "selfieKey" TEXT,
 ADD COLUMN     "trustScore" INTEGER NOT NULL DEFAULT 0;
-
--- AlterTable
-ALTER TABLE "Mission" ALTER COLUMN "proId" DROP NOT NULL;
 
 -- CreateTable
 CREATE TABLE "ReviewTarget" (
@@ -98,9 +92,6 @@ CREATE UNIQUE INDEX "QuickTaskResult_agentId_targetId_key" ON "QuickTaskResult"(
 
 -- CreateIndex
 CREATE INDEX "Agent_level_idx" ON "Agent"("level");
-
--- AddForeignKey
-ALTER TABLE "Mission" ADD CONSTRAINT "Mission_proId_fkey" FOREIGN KEY ("proId") REFERENCES "Pro"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "QuickTaskResult" ADD CONSTRAINT "QuickTaskResult_missionId_fkey" FOREIGN KEY ("missionId") REFERENCES "Mission"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
