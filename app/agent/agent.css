@@ -1,0 +1,7 @@
+.mc-app { min-height: 100dvh; max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; background: var(--paper); }
+.mc-app .mc-scroll { overflow: visible; flex: 1; padding-top: var(--space-2); }
+.mc-app .mc-bottom { position: sticky; bottom: 0; z-index: 5; padding-bottom: max(var(--space-4), env(safe-area-inset-bottom)); }
+.mc-app .mc-tabbar { position: sticky; bottom: 0; z-index: 5; padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+.mc-app .mc-appbar { position: sticky; top: 0; z-index: 5; background: var(--paper); }
+.mc-app a.mc-mission { text-decoration: none; }
+.mc-app .mc-toast { margin: var(--space-3) var(--space-4) 0; }
