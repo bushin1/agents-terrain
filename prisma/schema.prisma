@@ -269,6 +269,7 @@ model InboundSms {
   body      String
   missionId String?
   handled   Boolean  @default(false)
+  messageSid String?  @unique // identifiant Twilio (MessageSid) : un renvoi n'est traité qu'une fois
   createdAt DateTime @default(now())
 
   @@index([handled, createdAt])
