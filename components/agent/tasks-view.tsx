@@ -3,6 +3,90 @@ import { useState, useTransition } from 'react'
 import { Icon } from '@/components/mc/icons'
 import { usd } from '@/components/mc/money'
 
+const CHARTE_AGENT = [
+  "Je publie l'avis depuis mon propre compte Google — MapCrew n'a jamais accès à mes identifiants.",
+  "Je confirme être physiquement localisé dans la ville ou l'état de la cible au moment de la mission.",
+  "Je m'engage à ne pas divulguer les fiches ciblées à des tiers.",
+  "Je comprends que l'avis doit rester en ligne 14 jours. S'il est retiré par Google, je ne serai pas payé.",
+  "Tout manquement au protocole peut entraîner la suspension immédiate de mon compte.",
+]
+
+const CHARTE_PLATFORM = [
+  "MapCrew s'engage à me payer chaque avis validé le vendredi suivant.",
+  "MapCrew s'engage à me fournir un PDF de suivi pour chaque mission.",
+  "MapCrew ne me demande jamais de visiter physiquement un commerce.",
+]
+
+function EngagementModal({ amountCents, onConfirm, onCancel }: { amountCents: number; onConfirm: () => void; onCancel: () => void }) {
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+      onClick={onCancel}
+    >
+      <div
+        style={{ background: 'var(--bg)', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto', padding: '24px 20px 36px' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ width: 36, height: 4, background: 'var(--border)', borderRadius: 2, margin: '0 auto 20px' }} />
+        <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Charte d&apos;engagement</h2>
+        <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>
+          Pour débloquer cette mission à{' '}
+          <strong style={{ color: 'var(--ink)' }}>{usd(amountCents, { cents: true })}</strong>,
+          {' '}confirmez les points suivants.
+        </p>
+
+        <div style={{ marginBottom: 16 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: 8 }}>
+            Vous vous engagez à…
+          </p>
+          <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {CHARTE_AGENT.map((item) => (
+              <li key={item} style={{ fontSize: 13, color: 'var(--ink)', paddingLeft: 20, position: 'relative', lineHeight: 1.5 }}>
+                <span style={{ position: 'absolute', left: 0, color: 'var(--accent)', fontWeight: 700 }}>✓</span>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div style={{ marginBottom: 24 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: 8 }}>
+            MapCrew s&apos;engage à…
+          </p>
+          <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {CHARTE_PLATFORM.map((item) => (
+              <li key={item} style={{ fontSize: 13, color: 'var(--ink)', paddingLeft: 20, position: 'relative', lineHeight: 1.5 }}>
+                <span style={{ position: 'absolute', left: 0, color: 'var(--accent)', fontWeight: 700 }}>✓</span>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <p style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', marginBottom: 16 }}>
+          Document validé — en confirmant, vous signez électroniquement cet engagement.
+        </p>
+
+        <button
+          type="button"
+          className="mc-btn mc-btn--primary mc-btn--lg mc-btn--block"
+          onClick={onConfirm}
+        >
+          <Icon name="check" /> J&apos;accepte et je veux ma mission
+        </button>
+        <button
+          type="button"
+          className="mc-btn mc-btn--ghost mc-btn--block"
+          style={{ marginTop: 10 }}
+          onClick={onCancel}
+        >
+          Annuler
+        </button>
+      </div>
+    </div>
+  )
+}
+
 interface ActiveTask {
   id: string
   missionId: string
@@ -54,6 +138,7 @@ export function TasksView(props: {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [screenshot, setScreenshot] = useState<File | null>(null)
+  const [showCharte, setShowCharte] = useState(false)
 
   async function requestTask() {
     setError(null)
@@ -92,6 +177,13 @@ export function TasksView(props: {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+      {showCharte && (
+        <EngagementModal
+          amountCents={props.taskAmountCents}
+          onConfirm={() => { setShowCharte(false); requestTask() }}
+          onCancel={() => setShowCharte(false)}
+        />
+      )}
       <div style={{ padding: '4px 16px 12px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div className="mc-between">
           <h1 className="h2">Quick Tasks</h1>
@@ -190,9 +282,9 @@ export function TasksView(props: {
               type="button"
               className="mc-btn mc-btn--primary mc-btn--lg"
               disabled={!props.canRequest || isPending}
-              onClick={requestTask}
+              onClick={() => setShowCharte(true)}
             >
-              <Icon name="zap" /> {isPending ? 'Finding a task...' : 'Get a Task'}
+              <Icon name="zap" /> {isPending ? 'Recherche en cours...' : 'Obtenir une mission'}
             </button>
             {!props.canRequest && props.reason && (
               <p className="body-xs mc-muted" style={{ textAlign: 'center' }}>{props.reason}</p>
