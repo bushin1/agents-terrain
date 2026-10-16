@@ -51,12 +51,11 @@ describe('Outbox', () => {
 
   it('une tâche ajoutée pendant l’envoi part dans le même passage', async () => {
     const store = memoryStore()
-    let box: Outbox
     const send = vi.fn(async (j: Job): Promise<SendResult> => {
       if (j.id === 'a') await box.enqueue(step('b'))
       return { ok: true, state: null }
     })
-    box = new Outbox(store, send)
+    const box = new Outbox(store, send)
     await box.enqueue(step('a'))
     expect((await box.flush()).sent).toBe(2)
   })

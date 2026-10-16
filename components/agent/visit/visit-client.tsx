@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { Icon } from '@/components/mc/icons'
 import { STEPS_BY_TYPE, type StepName } from '@/modules/missions/checklist-rule'
 import type { VisitState } from '@/modules/missions/visit'
@@ -21,6 +21,13 @@ const META: Record<StepName, { title: string; meta: string }> = {
   checkout: { title: 'Check out', meta: 'Confirm you’re leaving' },
 }
 
+// Abonnement à l'état de connexion du navigateur (useSyncExternalStore).
+function subscribeOnline(onChange: () => void) {
+  window.addEventListener('online', onChange)
+  window.addEventListener('offline', onChange)
+  return () => { window.removeEventListener('online', onChange); window.removeEventListener('offline', onChange) }
+}
+
 export function VisitClient({ initial, defaults }: {
   initial: VisitState
   defaults: { contactName: string; city: string; zip: string; category: string }
@@ -29,7 +36,7 @@ export function VisitClient({ initial, defaults }: {
   const missionId = initial.missionId
   const [state, setState] = useState(initial)
   const [queue, setQueue] = useState<Job[]>([])
-  const [online, setOnline] = useState(true)
+  const online = useSyncExternalStore(subscribeOnline, () => navigator.onLine, () => true)
   const [syncing, setSyncing] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -50,14 +57,12 @@ export function VisitClient({ initial, defaults }: {
   }, [outbox, refreshQueue, missionId])
 
   useEffect(() => {
-    setOnline(navigator.onLine)
-    void refreshQueue().then(flush)
-    const on = () => { setOnline(true); void flush() }
-    const off = () => setOnline(false)
+    // Premier passage au montage, lancé de façon asynchrone (pas de setState synchrone dans l'effet).
+    void Promise.resolve().then(refreshQueue).then(flush)
+    const on = () => void flush()
     window.addEventListener('online', on)
-    window.addEventListener('offline', off)
     const timer = window.setInterval(() => void flush(), 30_000)
-    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); window.clearInterval(timer) }
+    return () => { window.removeEventListener('online', on); window.clearInterval(timer) }
   }, [flush, refreshQueue])
 
   async function add(job: Job) {
@@ -108,8 +113,10 @@ export function VisitClient({ initial, defaults }: {
   const isDone = (s: StepName) => (s === 'photos' ? state.photos.length + pendingPhotos.length >= state.minPhotos : !!state.steps[s as Exclude<StepName, 'photos'>] || pendingSteps.has(s))
   const doneCount = steps.filter(isDone).length
   const current = steps.find((s) => !isDone(s) && state.editable.includes(s)) ?? null
-  const [open, setOpen] = useState<StepName | null>(current)
-  useEffect(() => setOpen((o) => (o && !isDone(o) ? o : current)), [current]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Étape ouverte à la main, avec l'étape courante au moment du choix. Quand l'étape courante change, on garde
+  // l'étape choisie si elle n'est pas terminée, sinon on ouvre la nouvelle étape courante.
+  const [manual, setManual] = useState<{ step: StepName | null; current: StepName | null } | null>(null)
+  const open = !manual ? current : manual.current === current || (manual.step && !isDone(manual.step)) ? manual.step : current
 
   const remaining = steps.length - doneCount
   const canSubmit = state.missing.length === 0 && queue.length === 0 && online
@@ -153,7 +160,7 @@ export function VisitClient({ initial, defaults }: {
             const st = done ? 'done' : s === current ? 'current' : 'todo'
             return (
               <div key={s}>
-                <button type="button" className="mc-step" data-state={st} aria-expanded={open === s} disabled={!editable && !done} onClick={() => setOpen(open === s ? null : s)}>
+                <button type="button" className="mc-step" data-state={st} aria-expanded={open === s} disabled={!editable && !done} onClick={() => setManual({ step: open === s ? null : s, current })}>
                   <span className="mc-step__dot">{done ? <Icon name="check" className="mc-ico--sm" /> : i + 1}</span>
                   <span><span className="mc-step__title">{META[s].title}</span><br /><span className="mc-step__meta">{pendingSteps.has(s) ? 'Saved on phone · uploading' : META[s].meta}</span></span>
                   <span className="mc-step__status">{done ? 'Done' : st === 'current' ? 'Now' : ''}</span>

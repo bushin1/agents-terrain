@@ -1,5 +1,6 @@
 'use client'
-import { startTransition, useActionState, useEffect, useState } from 'react'
+import Link from 'next/link'
+import { startTransition, useActionState, useState } from 'react'
 import { Icon } from '@/components/mc/icons'
 import { CodeForm } from '@/components/agent/code-form'
 import { SubmitButton } from '@/components/agent/submit-button'
@@ -35,13 +36,16 @@ export function ApplyForm() {
   const errors = state.fieldErrors ?? {}
   const set = <K extends keyof Values>(k: K, value: Values[K]) => setV((x) => ({ ...x, [k]: value }))
 
-  useEffect(() => {
+  // Réaction au retour de l'action, pendant le rendu (et non dans un effet) : on mémorise le dernier état traité.
+  const [handled, setHandled] = useState(state)
+  if (state !== handled) {
+    setHandled(state)
     if (state.phone) setVerifying(true)
     else if (state.fieldErrors) {
       const s = firstStepWithError(state.fieldErrors)
       if (s >= 0) setStep(s)
     }
-  }, [state])
+  }
 
   function toFormData(): FormData {
     const f = new FormData()
@@ -66,7 +70,7 @@ export function ApplyForm() {
         {step > 0 ? (
           <button type="button" className="mc-iconbtn" aria-label="Back" onClick={() => setStep(step - 1)}><Icon name="arrow-left" /></button>
         ) : (
-          <a className="mc-iconbtn" aria-label="Back" href="/"><Icon name="arrow-left" /></a>
+          <Link className="mc-iconbtn" aria-label="Back" href="/"><Icon name="arrow-left" /></Link>
         )}
         <span className="mc-appbar__title">Apply</span>
         <span className="body-s mc-muted mc-num" style={{ paddingRight: 12 }}>{step + 1} of 6</span>
