@@ -58,8 +58,10 @@ model OtpCode {
   attempts  Int       @default(0)
   usedAt    DateTime?
   createdAt DateTime  @default(now())
+  ip        String? // adresse IP de la demande (limite anti-pompage SMS)
 
   @@index([phone, createdAt])
+  @@index([ip, createdAt])
 }
 
 model TrainingAttempt {
