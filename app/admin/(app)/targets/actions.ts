@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
-import { requireAdmin } from '@/lib/admin-access'
+import { requireAdmin } from '@/lib/session'
 import { runAction } from '@/app/admin/_lib/run-action'
 
 export const createTarget = runAction(async (fd: FormData) => {

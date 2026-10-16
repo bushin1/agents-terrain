@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { requireAdmin } from '@/lib/admin-access'
+import { requireAdmin } from '@/lib/session'
 import { approveTask, rejectTask } from './actions'
 import { ActionForm } from '@/app/admin/_components/action-form'
 

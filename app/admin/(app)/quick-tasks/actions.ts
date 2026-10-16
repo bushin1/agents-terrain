@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
-import { requireAdmin } from '@/lib/admin-access'
+import { requireAdmin } from '@/lib/session'
 import { getSettings } from '@/modules/settings'
 import { verifyTask } from '@/modules/quick-tasks'
 import { runAction } from '@/app/admin/_lib/run-action'
