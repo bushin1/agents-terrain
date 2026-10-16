@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { logAudit } from '@/modules/audit'
 import { Prisma } from '@prisma/client'
 import { geocodeZip } from '@/modules/geo'
-import { normalizeUsPhone } from '@/modules/sms'
+import { normalizeIntlPhone } from '@/modules/sms'
 import { parseApplication } from './apply-rule'
 import { requestOtp, verifyOtp } from './otp'
 
@@ -60,8 +60,8 @@ export async function apply(input: Record<string, unknown>, now: Date = new Date
 
 /** Demande de code pour se connecter. Un numéro inconnu reçoit la même réponse, sans SMS envoyé. */
 export async function requestLoginCode(rawPhone: string, now: Date = new Date(), ip: string | null = null): Promise<{ ok: true; phone: string } | { ok: false; error: string }> {
-  const phone = normalizeUsPhone(rawPhone)
-  if (!phone) return { ok: false, error: 'Enter a valid US mobile number' }
+  const phone = normalizeIntlPhone(rawPhone)
+  if (!phone) return { ok: false, error: 'Enter a valid mobile number (e.g. +1 617 555 0142 or +33 6 12 34 56 78)' }
   const agent = await prisma.agent.findUnique({ where: { phone } })
   // Même chemin pour un numéro inconnu (code enregistré, aucun SMS) : les limites ne révèlent pas l'inscription.
   const r = await requestOtp(phone, { now, ip, send: agent !== null })
@@ -70,7 +70,7 @@ export async function requestLoginCode(rawPhone: string, now: Date = new Date(),
 
 /** Fournisseur Auth.js « agent-otp » : vérifie le code et valide le numéro d'un candidat. */
 export async function authorizeAgentOtp(rawPhone: string, code: string, now: Date = new Date()): Promise<{ id: string; name: string } | null> {
-  const phone = normalizeUsPhone(rawPhone)
+  const phone = normalizeIntlPhone(rawPhone)
   if (!phone || !/^\d{6}$/.test(code)) return null
   if (!(await verifyOtp(phone, code, now))) return null
   const agent = await prisma.agent.findUnique({ where: { phone } })

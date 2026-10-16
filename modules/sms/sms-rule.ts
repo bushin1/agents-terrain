@@ -11,6 +11,21 @@ export function normalizeUsPhone(input: string): string | null {
   return '+' + digits
 }
 
+/**
+ * Numéro international (US/CA, FR, ou tout numéro E.164) → E.164, ou null si invalide.
+ * Accepte : +33612345678, 0612345678, +1 (617) 555-0142, 6175550142, +44…
+ */
+export function normalizeIntlPhone(input: string): string | null {
+  const compact = input.replace(/[\s\-\.\(\)]/g, '')
+  // Déjà en E.164 (+XX…)
+  if (/^\+\d{7,15}$/.test(compact)) return compact
+  // NANP sans indicatif pays : 10 chiffres → +1
+  if (/^\d{10}$/.test(compact)) return `+1${compact}`
+  // Format français « 0XXXXXXXXX » (mobile 06/07, fixe 01-05)
+  if (/^0\d{9}$/.test(compact)) return `+33${compact.slice(1)}`
+  return null
+}
+
 export type InboundReply = { kind: 'RATING'; value: 1 | 2 | 3 | 4 | 5 } | { kind: 'DENIED' } | { kind: 'OTHER' }
 
 /** Réponse d'un pro au SMS après visite : une note 1–5, « NO », ou autre chose. */

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { isAdult } from '@/modules/agents/agent-rule'
-import { normalizeUsPhone } from '@/modules/sms/sms-rule'
+import { normalizeIntlPhone } from '@/modules/sms/sms-rule'
 
 export const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 export const AVAILABILITY_SLOTS: string[] = DAYS.flatMap((d) => [`${d}-am`, `${d}-pm`])
@@ -13,9 +13,9 @@ export function applicationSchema(now: Date) {
     lastName: z.string().trim().min(1, 'Enter your last name').max(60),
     email: z.string().trim().toLowerCase().pipe(z.email({ message: 'Enter a valid email' })),
     phone: z.string().transform((v, ctx) => {
-      const phone = normalizeUsPhone(v)
+      const phone = normalizeIntlPhone(v)
       if (!phone) {
-        ctx.addIssue({ code: 'custom', message: 'Enter a valid US mobile number' })
+        ctx.addIssue({ code: 'custom', message: 'Enter a valid mobile number (e.g. +1 617 555 0142, +33 6 12 34 56 78, or 0612345678)' })
         return z.NEVER
       }
       return phone
@@ -30,7 +30,10 @@ export function applicationSchema(now: Date) {
       }, 'Enter your date of birth')
       .transform((s) => new Date(`${s}T00:00:00Z`))
       .refine((d) => isAdult(d, now), 'You must be 18 or older'),
-    zip: z.string().trim().regex(/^\d{5}$/, 'Enter a 5-digit ZIP code'),
+    zip: z.string().trim().refine(
+      (v) => /^\d{5}$/.test(v) || /^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/.test(v),
+      'Enter a ZIP code (e.g. 02108) or postal code (e.g. H2X 1Y3)'
+    ).transform((v) => v.toUpperCase()),
     radiusMiles: z.coerce.number().refine((n) => (RADIUS_OPTIONS as readonly number[]).includes(n), 'Choose a travel radius'),
     hasCar: z.enum(['yes', 'no'], { message: 'Tell us if you have a car' }).transform((v) => v === 'yes'),
     availability: z

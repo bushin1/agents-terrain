@@ -95,8 +95,8 @@ export function ApplyForm() {
             </>
           )}
           {step === 1 && (
-            <Field id="phone" label="Mobile number" error={errors.phone} help="We text you a code to log in. US mobile numbers only.">
-              <input className="mc-input mc-num" id="phone" type="tel" inputMode="tel" autoComplete="tel" value={v.phone} onChange={(e) => set('phone', e.target.value)} placeholder="(617) 555-0142" required />
+            <Field id="phone" label="Mobile number" error={errors.phone} help="We text you a one-time code. US, Canada (+1) and France (+33) supported.">
+              <input className="mc-input mc-num" id="phone" type="tel" inputMode="tel" autoComplete="tel" value={v.phone} onChange={(e) => set('phone', e.target.value)} placeholder="+1 617 555 0142 or +33 6 12 34 56 78" required />
             </Field>
           )}
           {step === 2 && (

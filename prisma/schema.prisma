@@ -171,6 +171,8 @@ model Mission {
   postVisitSmsAt       DateTime?
   proRating            Int?
   proDenied            Boolean       @default(false)
+  charteAcceptedAt     DateTime?
+  charteAcceptedIp     String?
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
   submission           Submission?
