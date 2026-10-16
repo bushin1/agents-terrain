@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+/* Polices du design system, servies par next/font (pas d'appel à Google Fonts depuis le navigateur). */
+:root {
+  --font-display: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif;
+  --font-sans: var(--font-public-sans), "Helvetica Neue", Arial, sans-serif;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
