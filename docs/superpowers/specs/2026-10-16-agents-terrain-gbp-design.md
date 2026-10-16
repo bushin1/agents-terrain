@@ -225,18 +225,18 @@ Chaque module a un dossier `modules/<nom>/` qui expose une interface publique (`
 | Module | Responsabilité | Interface publique (principales fonctions) | Dépend de |
 |---|---|---|---|
 | `recruitment` | Landing, candidature, contrôle d'âge | `apply(input)` | `sms`, géocodage |
-| `academy` | Modules, quiz, certification | `submitAttempt(agentId, answers)`, `getProgress(agentId)`, `unlock(agentId, adminId)` | — |
+| `academy` | Modules, quiz, certification | `submitQuiz(agentId, answers)`, `unlockAgent(agentId, actor)`, `refuseAgent(agentId, actor, reason)` | — |
 | `missions` | Pros, missions, dispatch, checklist, états du pro et de la mission | `listOpenMissionsFor(agentId)`, `accept(missionId, agentId)`, `saveStep(missionId, step, data)`, `submit(missionId)`, `transition(missionId, to, actor, reason?)`, `setProStatus(proId, to, actor, reason?)`, `setListingStatus(proId, to, data?)`, `runNoShowSweep()`, `runNeedsFixSweep()`, `runListingDeadlineSweep()` | `sms` |
-| `review` | File de validation, alertes fraude | `listQueue()`, `validate(missionId, adminId)`, `requestFix(...)`, `reject(...)`, `computeFlags(missionId)` | `missions`, `ledger` |
+| `review` | File de validation, alertes fraude, réponses SMS des pros | `listQueue()`, `validate(missionId, actor, { confirmFlags })`, `requestFix(...)`, `reject(...)`, `refreshFraudFlags(missionId)`, `handleInboundSms(from, body)` | `missions`, `ledger`, `sms` |
 | `ledger` | Seul point de création et d'annulation des gains | `award(missionId, tier)`, `voidEarning(id, reason, adminId)`, `balanceOf(agentId)` | réglages |
 | `payouts` | Stripe Connect, virements | `startOnboarding(agentId)`, `runPayoutBatch(adminId)`, `retryPayout(payoutId)`, `handleConnectWebhook(event)` | Stripe (compte LLC US), `ledger` |
 | `listing` | Accès gestionnaire et détection « fiche en ligne » | `matchInvitations()`, `listUnmatchedInvitations()`, `linkInvitation(invitationName, proId, adminId)`, `checkVerification()`, `detectPublicListings()`, `confirmLive(proId, placeId, adminId)` | API Google Business Profile (compte dédié), API Places, `missions`, `ledger` |
 | `billing` | Lecture seule des comptes Stripe de facturation des clients, conversion, palier `CLIENT` | `listAccounts()`, `customerExists(account, cusId)`, `convert(proId, account, cusId, adminId)`, `runFirstPaymentSweep()` | Stripe (clés restreintes en lecture), `missions`, `ledger` |
-| `sms` | Envoi et réception de SMS | `send(to, template, vars)`, `handleInbound(from, body)` | Twilio |
+| `sms` | Envoi de SMS, gabarits, signature des webhooks | `sendSms(to, body)`, `smsTemplates`, `isValidTwilioSignature(...)` | Twilio |
 
 `ledger.award` est le **seul** point d'entrée qui crée un gain. Il applique les règles de la section 6 (montant, bonus de niveau, unicité, rattachement à la mission d'origine, délais) ; les déclencheurs ne calculent jamais de montant.
 
-`sms.handleInbound` reconnaît « 1 » à « 5 » et « NO » quand un SMS post-visite est en attente pour ce numéro, et les enregistre sur la mission. Tout autre message va dans « SMS reçus ». « STOP » est géré par Twilio.
+`review.handleInboundSms` reconnaît « 1 » à « 5 » et « NO » quand un SMS post-visite est en attente pour ce numéro, et les enregistre sur la mission. Tout autre message va dans « SMS reçus ». « STOP » est géré par Twilio.
 
 ### 9.3 Données (Prisma, résumé)
 - `Agent` : identité, date de naissance, mobile vérifié, ZIP, lat/lng, rayon, véhicule, disponibilités, `status`, `failedAttempts`, `stripeAccountId`, `stripePayoutsEnabled`, `contractVersion`, `contractSignedAt`, `contractIp`
