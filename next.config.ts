@@ -13,7 +13,6 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   typescript: { ignoreBuildErrors: true },
-  bundler: 'webpack',
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }]
   },
