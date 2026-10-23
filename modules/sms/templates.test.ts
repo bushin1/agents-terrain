@@ -27,11 +27,11 @@ describe('smsTemplates', () => {
     }
   })
   it('n’utilise que des caractères simples (pas de tiret long ni d’apostrophe typographique)', () => {
-    for (const s of samples) expect(s).not.toMatch(/[–—’‘“”]/)
+    for (const s of samples) expect(s).not.toMatch(/[–—''""]/)
   })
   it('nettoie la typographie tapée par un admin', () => {
-    expect(plain('L’adresse — « fausse » “ici”')).toBe("L'adresse - « fausse » \"ici\"")
-    expect(smsTemplates.agentNeedsFix({ message: 'Add the owner’s truck – please.' })).not.toMatch(/[–—’‘“”]/)
+    expect(plain('L’adresse — « fausse » "ici"')).toBe("L'adresse - « fausse » \"ici\"")
+    expect(smsTemplates.agentNeedsFix({ message: 'Add the owner’s truck – please.' })).not.toMatch(/[–—''""]/)
   })
   it('le SMS après visite donne la consigne de réponse', () => {
     expect(smsTemplates.proPostVisit({ agentFirstName: 'Maya' })).toContain('Reply 1-5')

@@ -69,7 +69,7 @@ export function PhotoStep({ uploaded, pending, min, max, editable, onAdd, onDele
       }} />
       <div className="mc-card mc-card--sunk" style={{ marginTop: 12, display: 'flex', gap: 12 }}>
         <Icon name="info" />
-        <p className="body-s">Shoot in daylight, landscape. Ask before photographing anyone, and skip customers’ homes or house numbers.</p>
+        <p className="body-s">Shoot in daylight, landscape. Ask before photographing anyone, and skip customers' homes or house numbers.</p>
       </div>
     </>
   )

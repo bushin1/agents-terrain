@@ -79,7 +79,7 @@ export default async function MissionPage({ params, searchParams }: { params: Pr
             <h2 className="h3" style={{ marginTop: 24 }}>Votre rémunération</h2>
             <div className="mc-card" style={{ marginTop: 12 }}>
               <div className="mc-kv">
-                {p.kind === ‘RETURN_VISIT’ ? (
+                {p.kind === 'RETURN_VISIT' ? (
                   <div><span className="k">Visite de retour validée</span><span className="v">{usd(p.returnVisitCents, { cents: true })}</span></div>
                 ) : (
                   <>
@@ -92,9 +92,9 @@ export default async function MissionPage({ params, searchParams }: { params: Pr
                 {p.levelBonusCents > 0 && <div><span className="k"><span className={`mc-level mc-level--${p.levelName.toLowerCase()}`} style={{ height: 24 }}>{LEVEL_LABEL[p.levelName]} +{p.levelBonusPct}%</span></span><span className="v">+{usd(p.levelBonusCents, { cents: true })}</span></div>}
                 <div><span className="k mc-kv__total">Jusqu&apos;à</span><span className="v money">{usd(p.upToCents, { cents: true })}</span></div>
               </div>
-              {p.kind === ‘VISIT’ && <p className="body-s mc-muted" style={{ marginTop: 8 }}>La dernière étape dépend de la décision du propriétaire. Votre bonus de niveau s&apos;applique aux trois étapes.</p>}
+              {p.kind === 'VISIT' && <p className="body-s mc-muted" style={{ marginTop: 8 }}>La dernière étape dépend de la décision du propriétaire. Votre bonus de niveau s&apos;applique aux trois étapes.</p>}
             </div>
-            <div className="mc-card mc-card--sunk" style={{ marginTop: 12, display: ‘flex’, gap: 12 }}>
+            <div className="mc-card mc-card--sunk" style={{ marginTop: 12, display: 'flex', gap: 12 }}>
               <Icon name="info" />
               <p className="body-s"><b>Annulation gratuite jusqu&apos;à 24 h avant</b> — jusqu&apos;au {d.releaseDeadlineLabel}. Après ce délai, contactez le support.</p>
             </div>

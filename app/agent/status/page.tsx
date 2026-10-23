@@ -5,10 +5,10 @@ import { signOut } from '@/lib/auth'
 import { Icon } from '@/components/mc/icons'
 
 const MESSAGES = {
-  APPLICANT: [‘Vérifiez votre numéro’, ‘Reconnectez-vous avec le code que nous vous avons envoyé par SMS pour finaliser votre candidature.’],
-  LOCKED: [‘Quiz bloqué’, ‘Vous avez utilisé vos 3 tentatives. Notre équipe examine votre compte et vous contactera par SMS.’],
-  REFUSED: [‘Candidature fermée’, `Nous ne pouvons pas proposer de missions à ce compte. Merci de l’intérêt que vous portez à ${BRAND_NAME}.`],
-  SUSPENDED: [‘Compte suspendu’, ‘Votre compte est suspendu pendant que notre équipe examine une mission récente. Les gains déjà validés restent dus. Nous vous contacterons par SMS.’],
+  APPLICANT: ['Vérifiez votre numéro', 'Reconnectez-vous avec le code que nous vous avons envoyé par SMS pour finaliser votre candidature.'],
+  LOCKED: ['Quiz bloqué', 'Vous avez utilisé vos 3 tentatives. Notre équipe examine votre compte et vous contactera par SMS.'],
+  REFUSED: ['Candidature fermée', `Nous ne pouvons pas proposer de missions à ce compte. Merci de l’intérêt que vous portez à ${BRAND_NAME}.`],
+  SUSPENDED: ['Compte suspendu', 'Votre compte est suspendu pendant que notre équipe examine une mission récente. Les gains déjà validés restent dus. Nous vous contacterons par SMS.'],
 } as const
 
 export default async function StatusPage() {

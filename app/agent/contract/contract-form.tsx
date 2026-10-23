@@ -11,7 +11,7 @@ export function ContractForm() {
       <div className="mc-scroll" style={{ paddingTop: 0 }}>
         <div className="mc-field">
           <label className="mc-label" htmlFor="sig">Tapez votre nom légal complet pour signer</label>
-          <input className="mc-input" id="sig" name="signedName" autoComplete="name" required style={{ fontFamily: ‘var(--font-display)’, fontSize: 19 }} />
+          <input className="mc-input" id="sig" name="signedName" autoComplete="name" required style={{ fontFamily: 'var(--font-display)', fontSize: 19 }} />
         </div>
         <label className="mc-check" style={{ marginTop: 16 }}>
           <input type="checkbox" name="agree" />

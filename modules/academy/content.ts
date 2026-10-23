@@ -25,7 +25,7 @@ export const ACADEMY_MODULES: AcademyModule[] = [
     questions: [
       { id: 'why-1', prompt: 'Who owns the profile you help set up?', options: ['The business owner', `${BRAND_NAME}`, 'You, the field agent', 'A Google employee'], correctIndex: 0 },
       { id: 'why-2', prompt: 'How much does a Google Business Profile cost the owner?', options: ['$99 setup fee', 'Nothing, it is free', '$25 per month', 'It depends on the city'], correctIndex: 1 },
-      { id: 'why-3', prompt: 'Whose Google account is the profile created with?', options: ['Yours', `${BRAND_NAME}’s`, 'The owner’s own account', 'Any account works'], correctIndex: 2 },
+      { id: 'why-3', prompt: 'Whose Google account is the profile created with?', options: ['Yours', `${BRAND_NAME}'s`, 'The owner’s own account', 'Any account works'], correctIndex: 2 },
     ],
   },
   {
@@ -72,11 +72,11 @@ export const ACADEMY_MODULES: AcademyModule[] = [
       'Google decides how a profile is verified. Sometimes it asks for a short video.',
       'The owner records the video from their own account. Never from yours.',
       'A good video shows where the business is (street, signage), its equipment or branded vehicle, and proof the owner runs it (opening the shop, using the tools).',
-      'If Google does not offer verification yet, select “Not offered yet”. That is normal.',
+      'If Google does not offer verification yet, select "Not offered yet". That is normal.',
     ],
     questions: [
       { id: 'verif-1', prompt: 'Who records the verification video?', options: ['You, from your account', 'The owner, from their own account', `${BRAND_NAME} support`, 'Nobody, it is optional'], correctIndex: 1 },
-      { id: 'verif-2', prompt: 'Google does not offer verification during your visit. What do you do?', options: ['Select “Not offered yet” and finish the visit', 'Leave without checking out', 'Ask the owner to pay for faster verification', 'Try from your own phone'], correctIndex: 0 },
+      { id: 'verif-2', prompt: 'Google does not offer verification during your visit. What do you do?', options: ['Select "Not offered yet" and finish the visit', 'Leave without checking out', 'Ask the owner to pay for faster verification', 'Try from your own phone'], correctIndex: 0 },
       { id: 'verif-3', prompt: 'What should a verification video show?', options: ['Only the owner’s face', 'The location, the equipment, and proof the owner runs the business', 'Your ID card', 'The inside of your car'], correctIndex: 1 },
     ],
   },
@@ -93,10 +93,10 @@ export const ACADEMY_MODULES: AcademyModule[] = [
       'If something feels wrong, leave and contact support.',
     ],
     questions: [
-      { id: 'rules-1', prompt: 'How do you introduce yourself?', options: ['“I’m from Google.”', '“I’m a Google partner.”', `“I’m a field agent with ${BRAND_NAME}, helping local contractors set up their free Google profile.”`, '“I’m calling on behalf of Google Maps.”'], correctIndex: 2 },
+      { id: 'rules-1', prompt: 'How do you introduce yourself?', options: ['"I’m from Google."', '"I’m a Google partner."', `"I’m a field agent with ${BRAND_NAME}, helping local contractors set up their free Google profile."`, '"I’m calling on behalf of Google Maps."'], correctIndex: 2 },
       { id: 'rules-2', prompt: 'The owner asks you to type their password for them.', options: ['Type it quickly', 'Hand the phone back and let them type it', 'Write it down for later', 'Ask them to text it to you'], correctIndex: 1 },
       { id: 'rules-3', prompt: 'The owner asks if you can leave them a 5-star review.', options: ['Agree, it helps them', 'Explain that agents never handle reviews', 'Ask a friend to do it', 'Do it after the visit'], correctIndex: 1 },
-      { id: 'rules-4', prompt: 'Which business name goes on the profile?', options: ['The real name on their sign or license', 'Their name plus keywords like “Best Concrete Boston”', 'A shorter, catchier name', `${BRAND_NAME}’s name`], correctIndex: 0 },
+      { id: 'rules-4', prompt: 'Which business name goes on the profile?', options: ['The real name on their sign or license', 'Their name plus keywords like "Best Concrete Boston"', 'A shorter, catchier name', `${BRAND_NAME}'s name`], correctIndex: 0 },
     ],
   },
 ]

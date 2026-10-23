@@ -1,8 +1,8 @@
 import { BRAND_NAME } from '@/lib/brand'
 
-/** Remplace la typographie qu'un clavier français ajoute (’ “ ” – —) par des caractères simples. */
+/** Remplace la typographie qu'un clavier français ajoute (' " " – —) par des caractères simples. */
 export function plain(text: string): string {
-  return text.replace(/[’‘]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-')
+  return text.replace(/['']/g, "'").replace(/[""]/g, '"').replace(/[–—]/g, '-')
 }
 
 // Textes des SMS. Règles : commencer par la marque, ne jamais se présenter comme Google, ne jamais
