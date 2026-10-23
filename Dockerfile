@@ -4,7 +4,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -
 COPY package*.json ./
 RUN npm ci
 COPY . .
-RUN npx prisma generate && TURBOPACK=0 npm run build
+RUN npx prisma generate && npx next build --no-turbopack
 
 FROM node:22-slim
 WORKDIR /app
