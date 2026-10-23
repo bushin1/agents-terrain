@@ -386,3 +386,18 @@ model QuickTaskResult {
   @@index([targetId, createdAt])
   @@unique([agentId, targetId])
 }
+
+// Textes d'avis réels collectés côté gmb-tracker (clients qui ont rempli notre formulaire).
+// Injectés via POST /api/internal/review-texts, consommés par assignTask en priorité
+// sur les templates génériques pickReviewText().
+model PendingReviewText {
+  id        String    @id @default(cuid())
+  placeId   String    // matches ReviewTarget.placeId
+  text      String
+  rating    Int       // 1..5 (info only)
+  sourceRef String?   // ReviewFunnelResponse.id from gmb-tracker
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([placeId, usedAt])
+}

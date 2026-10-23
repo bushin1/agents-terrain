@@ -74,7 +74,14 @@ export async function assignTask(db: PrismaClient, agentId: string, settings: Se
 
   if (!target) return { ok: false as const, reason: 'No targets available right now' }
 
-  const reviewText = pickReviewText(target.trade)
+  const pending = await db.pendingReviewText.findFirst({
+    where: { placeId: target.placeId, usedAt: null },
+    orderBy: { createdAt: 'asc' },
+  })
+  const reviewText = pending?.text ?? pickReviewText(target.trade)
+  if (pending) {
+    await db.pendingReviewText.update({ where: { id: pending.id }, data: { usedAt: now } })
+  }
   const expiresAt = new Date(now.getTime() + settings.quickTask.expirationHours * 3_600_000)
 
   await db.pro.upsert({
